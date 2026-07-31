@@ -1,0 +1,6 @@
+{
+  "name": "TeamOps Mobile: Guía de Tareas, Manuales y Seguimiento",
+  "description": "Aplicación móvil y panel administrativo para equipos con guía de tareas diarias, manuales SOP, avance en tiempo real, modo offline, cifrado E2EE, 2FA, notificaciones y reportes exportables PDF/CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
