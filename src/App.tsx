@@ -43,6 +43,7 @@ import {
   INITIAL_LOCATIONS
 } from './data/mockData';
 import { getThemeClasses, generateRecurringDates } from './utils/helpers';
+import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
 import { HeaderNavbar } from './components/HeaderNavbar';
 import { DailyTaskList } from './components/DailyTaskList';
 import { ProceduresLibrary } from './components/ProceduresLibrary';
@@ -56,26 +57,14 @@ import { CreateTaskModal } from './components/CreateTaskModal';
 import { UserProfileLoginModal, UserSession } from './components/UserProfileLoginModal';
 
 export default function App() {
-  // Persistent States with localStorage
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_tasks');
-      return saved ? JSON.parse(saved) : INITIAL_TASKS;
-    } catch {
-      return INITIAL_TASKS;
-    }
-  });
+  // Tasks & Collaborators now live in Supabase (shared cloud database) so that
+  // every user, on every device, reads and writes the same data in real time.
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isCloudDataLoaded, setIsCloudDataLoaded] = useState<boolean>(false);
 
   const [procedures, setProcedures] = useState<Procedure[]>(INITIAL_PROCEDURES);
 
-  const [collaborators, setCollaborators] = useState<Collaborator[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_collaborators');
-      return saved ? JSON.parse(saved) : INITIAL_COLLABORATORS;
-    } catch {
-      return INITIAL_COLLABORATORS;
-    }
-  });
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   
   // ABM Catalogs State with localStorage persistence
   const [countries, setCountries] = useState<Country[]>(() => {
@@ -158,9 +147,104 @@ export default function App() {
 
   const theme = getThemeClasses(themeConfig.primaryColor);
 
-  // Persist states to localStorage
-  useEffect(() => { localStorage.setItem('teamops_tasks', JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem('teamops_collaborators', JSON.stringify(collaborators)); }, [collaborators]);
+  // Load Tasks & Collaborators from Supabase on startup, and keep them live-synced
+  // across every connected device via Supabase Realtime.
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      // Fallback for local/dev environments without Supabase configured yet.
+      setTasks(INITIAL_TASKS);
+      setCollaborators(INITIAL_COLLABORATORS);
+      setIsCloudDataLoaded(true);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const { data: taskRows, error: taskErr } = await supabase
+          .from('tasks')
+          .select('payload')
+          .order('updated_at', { ascending: false });
+        if (taskErr) throw taskErr;
+
+        if (taskRows && taskRows.length > 0) {
+          if (isMounted) setTasks(taskRows.map((r: any) => r.payload as Task));
+        } else {
+          // First run: seed the shared database with the sample tasks.
+          if (isMounted) setTasks(INITIAL_TASKS);
+          await supabase.from('tasks').upsert(
+            INITIAL_TASKS.map(t => ({ id: t.id, payload: t, updated_at: new Date().toISOString() }))
+          );
+        }
+      } catch (e) {
+        console.error('No se pudo cargar tareas desde Supabase, usando datos de ejemplo locales.', e);
+        if (isMounted) setTasks(INITIAL_TASKS);
+      }
+
+      try {
+        const { data: collabRows, error: collabErr } = await supabase
+          .from('collaborators')
+          .select('payload');
+        if (collabErr) throw collabErr;
+
+        if (collabRows && collabRows.length > 0) {
+          if (isMounted) setCollaborators(collabRows.map((r: any) => r.payload as Collaborator));
+        } else {
+          if (isMounted) setCollaborators(INITIAL_COLLABORATORS);
+          await supabase.from('collaborators').upsert(
+            INITIAL_COLLABORATORS.map(c => ({ id: c.id, payload: c, updated_at: new Date().toISOString() }))
+          );
+        }
+      } catch (e) {
+        console.error('No se pudo cargar colaboradores desde Supabase, usando datos de ejemplo locales.', e);
+        if (isMounted) setCollaborators(INITIAL_COLLABORATORS);
+      } finally {
+        if (isMounted) setIsCloudDataLoaded(true);
+      }
+    };
+
+    loadData();
+
+    // Realtime: reflect changes made by other users/devices immediately.
+    const tasksChannel = supabase
+      .channel('tasks-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload: any) => {
+        if (payload.eventType === 'DELETE') {
+          setTasks(prev => prev.filter(t => t.id !== payload.old.id));
+        } else {
+          const updated = payload.new.payload as Task;
+          setTasks(prev => {
+            const exists = prev.some(t => t.id === updated.id);
+            return exists ? prev.map(t => (t.id === updated.id ? updated : t)) : [updated, ...prev];
+          });
+        }
+      })
+      .subscribe();
+
+    const collabChannel = supabase
+      .channel('collaborators-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborators' }, (payload: any) => {
+        if (payload.eventType === 'DELETE') {
+          setCollaborators(prev => prev.filter(c => c.id !== payload.old.id));
+        } else {
+          const updated = payload.new.payload as Collaborator;
+          setCollaborators(prev => {
+            const exists = prev.some(c => c.id === updated.id);
+            return exists ? prev.map(c => (c.id === updated.id ? updated : c)) : [updated, ...prev];
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(tasksChannel);
+      supabase.removeChannel(collabChannel);
+    };
+  }, []);
+
+  // Persist states to localStorage (ABM master catalogs stay local/per-admin for now)
   useEffect(() => { localStorage.setItem('teamops_countries', JSON.stringify(countries)); }, [countries]);
   useEffect(() => { localStorage.setItem('teamops_roles', JSON.stringify(roles)); }, [roles]);
   useEffect(() => { localStorage.setItem('teamops_departments', JSON.stringify(departments)); }, [departments]);
@@ -206,18 +290,31 @@ export default function App() {
   };
 
   // Update Task handler
-  const handleUpdateTask = (updatedTask: Task) => {
-    setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    
-    if (!isOnline) {
+  const handleUpdateTask = async (updatedTask: Task) => {
+    const taskWithSyncFlag = { ...updatedTask, synced: isOnline };
+    setTasks(prev => prev.map(t => t.id === updatedTask.id ? taskWithSyncFlag : t));
+
+    if (!isOnline || !isSupabaseConfigured) {
       showToast('⚠️ Cambio guardado localmente en Modo Offline. Se sincronizará al reconectar.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('tasks')
+      .upsert({ id: updatedTask.id, payload: { ...taskWithSyncFlag, synced: true }, updated_at: new Date().toISOString() });
+
+    if (error) {
+      console.error('Error al sincronizar tarea con Supabase:', error);
+      setTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, synced: false } : t));
+      showToast('Error de red durante la sincronización.');
     } else {
+      setTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, synced: true } : t));
       showToast('✓ Avance actualizado y sincronizado en tiempo real con cifrado E2EE.');
     }
   };
 
   // Create Task handler (Supports auto-generation of recurring task series up to 1 year horizon)
-  const handleCreateTask = (partialTask: Partial<Task>) => {
+  const handleCreateTask = async (partialTask: Partial<Task>) => {
     const startDate = partialTask.dueDate || new Date().toISOString().split('T')[0];
     const periodicity = partialTask.periodicity || 'unica';
     const periodEndDate = partialTask.periodEndDate;
@@ -264,6 +361,15 @@ export default function App() {
 
     setTasks(prev => [...createdTasks, ...prev]);
 
+    if (isSupabaseConfigured && isOnline) {
+      const { error } = await supabase.from('tasks').insert(
+        createdTasks.map(t => ({ id: t.id, payload: t, updated_at: new Date().toISOString() }))
+      );
+      if (error) {
+        console.error('Error al crear tarea(s) en Supabase:', error);
+      }
+    }
+
     if (createdTasks.length > 1) {
       showToast(`✨ ¡Se autogeneraron y registraron ${createdTasks.length} tareas recurrentes (${periodicity.toUpperCase()}) hasta ${periodEndDate}!`);
     } else {
@@ -271,30 +377,30 @@ export default function App() {
     }
   };
 
-  const handleDeleteTask = (taskId: string, deleteAllSeries?: boolean) => {
+  const handleDeleteTask = async (taskId: string, deleteAllSeries?: boolean) => {
     const taskToDelete = tasks.find(t => t.id === taskId);
     if (!taskToDelete) return;
 
+    let idsToDelete: string[] = [taskId];
+
     if (deleteAllSeries) {
       const seriesId = taskToDelete.recurrenceSeriesId;
-      let countDeleted = 0;
-      setTasks(prev => {
-        return prev.filter(t => {
-          if (seriesId && t.recurrenceSeriesId === seriesId) {
-            countDeleted++;
-            return false;
-          }
-          if (!seriesId && t.title === taskToDelete.title && t.periodicity === taskToDelete.periodicity && t.assignedUserId === taskToDelete.assignedUserId) {
-            countDeleted++;
-            return false;
-          }
-          return true;
-        });
+      const matches = tasks.filter(t => {
+        if (seriesId && t.recurrenceSeriesId === seriesId) return true;
+        if (!seriesId && t.title === taskToDelete.title && t.periodicity === taskToDelete.periodicity && t.assignedUserId === taskToDelete.assignedUserId) return true;
+        return false;
       });
+      idsToDelete = matches.map(t => t.id);
+      setTasks(prev => prev.filter(t => !idsToDelete.includes(t.id)));
       showToast(`🗑️ Se eliminaron todas las tareas de la serie de ${taskToDelete.code}.`);
     } else {
       setTasks(prev => prev.filter(t => t.id !== taskId));
       showToast(`🗑️ Tarea ${taskToDelete.code} eliminada por usuario autorizado.`);
+    }
+
+    if (isSupabaseConfigured && isOnline) {
+      const { error } = await supabase.from('tasks').delete().in('id', idsToDelete);
+      if (error) console.error('Error al eliminar tarea(s) en Supabase:', error);
     }
   };
 
@@ -308,24 +414,19 @@ export default function App() {
     setIsSyncing(true);
     try {
       const unsyncedItems = tasks.filter(t => !t.synced);
-      const response = await fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: unsyncedItems.map(t => ({
-            action: 'UPDATE_TASK',
-            taskId: t.id,
-            updates: t
-          }))
-        })
-      });
 
-      const data = await response.json();
-      
+      if (isSupabaseConfigured && unsyncedItems.length > 0) {
+        const { error } = await supabase.from('tasks').upsert(
+          unsyncedItems.map(t => ({ id: t.id, payload: { ...t, synced: true }, updated_at: new Date().toISOString() }))
+        );
+        if (error) throw error;
+      }
+
       // Mark all tasks as synced
       setTasks(prev => prev.map(t => ({ ...t, synced: true })));
-      showToast(`✓ Sincronización completada. ${data.itemsProcessed || unsyncedItems.length} cambios unificados en la nube.`);
+      showToast(`✓ Sincronización completada. ${unsyncedItems.length} cambios unificados en la nube.`);
     } catch (err) {
+      console.error('Error en sincronización manual:', err);
       showToast('Error de red durante la sincronización.');
     } finally {
       setIsSyncing(false);
@@ -333,7 +434,7 @@ export default function App() {
   };
 
   // Collaborators ABM Handlers
-  const handleAddCollaborator = (newCollabData: Omit<Collaborator, 'id' | 'monthlyPerformance'>) => {
+  const handleAddCollaborator = async (newCollabData: Omit<Collaborator, 'id' | 'monthlyPerformance'>) => {
     const newCollab: Collaborator = {
       ...newCollabData,
       id: `usr-${Date.now()}`,
@@ -342,17 +443,29 @@ export default function App() {
       ]
     };
     setCollaborators(prev => [newCollab, ...prev]);
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('collaborators').insert({ id: newCollab.id, payload: newCollab, updated_at: new Date().toISOString() });
+      if (error) console.error('Error al crear colaborador en Supabase:', error);
+    }
     showToast(`✨ Colaborador ${newCollab.name} registrado con éxito.`);
   };
 
-  const handleUpdateCollaborator = (updatedCollab: Collaborator) => {
+  const handleUpdateCollaborator = async (updatedCollab: Collaborator) => {
     setCollaborators(prev => prev.map(c => c.id === updatedCollab.id ? updatedCollab : c));
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('collaborators').upsert({ id: updatedCollab.id, payload: updatedCollab, updated_at: new Date().toISOString() });
+      if (error) console.error('Error al actualizar colaborador en Supabase:', error);
+    }
     showToast(`✓ Datos de ${updatedCollab.name} actualizados.`);
   };
 
-  const handleDeleteCollaborator = (id: string) => {
+  const handleDeleteCollaborator = async (id: string) => {
     const target = collaborators.find(c => c.id === id);
     setCollaborators(prev => prev.filter(c => c.id !== id));
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('collaborators').delete().eq('id', id);
+      if (error) console.error('Error al eliminar colaborador en Supabase:', error);
+    }
     showToast(`🗑️ Colaborador ${target?.name || ''} dado de baja del sistema.`);
   };
 
