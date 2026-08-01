@@ -1,4 +1,32 @@
-import { Task, Procedure, Collaborator, PushNotificationConfig, SecurityConfig, ThemeConfig, ApiEndpoint, Country, RoleDefinition, DepartmentDefinition, StatusDefinition, LocationDefinition } from '../types';
+import { Task, Procedure, Collaborator, PushNotificationConfig, SecurityConfig, ThemeConfig, ApiEndpoint, Country, RoleDefinition, DepartmentDefinition, StatusDefinition, LocationDefinition, CountryFlagPreset } from '../types';
+
+// Preset catalog used by the visual flag selector in the ABM "Países" form:
+// picking a country here auto-fills code, name and flag emoji.
+export const COUNTRY_FLAG_PRESETS: CountryFlagPreset[] = [
+  { code: 'AR', name: 'Argentina', flagEmoji: '🇦🇷' },
+  { code: 'MX', name: 'México', flagEmoji: '🇲🇽' },
+  { code: 'BR', name: 'Brasil', flagEmoji: '🇧🇷' },
+  { code: 'CL', name: 'Chile', flagEmoji: '🇨🇱' },
+  { code: 'CO', name: 'Colombia', flagEmoji: '🇨🇴' },
+  { code: 'PE', name: 'Perú', flagEmoji: '🇵🇪' },
+  { code: 'UY', name: 'Uruguay', flagEmoji: '🇺🇾' },
+  { code: 'PY', name: 'Paraguay', flagEmoji: '🇵🇾' },
+  { code: 'BO', name: 'Bolivia', flagEmoji: '🇧🇴' },
+  { code: 'EC', name: 'Ecuador', flagEmoji: '🇪🇨' },
+  { code: 'VE', name: 'Venezuela', flagEmoji: '🇻🇪' },
+  { code: 'PA', name: 'Panamá', flagEmoji: '🇵🇦' },
+  { code: 'CR', name: 'Costa Rica', flagEmoji: '🇨🇷' },
+  { code: 'GT', name: 'Guatemala', flagEmoji: '🇬🇹' },
+  { code: 'DO', name: 'República Dominicana', flagEmoji: '🇩🇴' },
+  { code: 'ES', name: 'España', flagEmoji: '🇪🇸' },
+  { code: 'US', name: 'Estados Unidos', flagEmoji: '🇺🇸' },
+  { code: 'CA', name: 'Canadá', flagEmoji: '🇨🇦' },
+  { code: 'PT', name: 'Portugal', flagEmoji: '🇵🇹' },
+  { code: 'FR', name: 'Francia', flagEmoji: '🇫🇷' },
+  { code: 'DE', name: 'Alemania', flagEmoji: '🇩🇪' },
+  { code: 'IT', name: 'Italia', flagEmoji: '🇮🇹' },
+  { code: 'GB', name: 'Reino Unido', flagEmoji: '🇬🇧' }
+];
 
 export const INITIAL_COUNTRIES: Country[] = [
   { id: 'cnt-ar', code: 'AR', name: 'Argentina', flagEmoji: '🇦🇷', region: 'LATAM Sur', currency: 'ARS', active: true, notes: 'Planta Principal y Centro Logístico América del Sur' },
@@ -315,6 +343,7 @@ export const INITIAL_COLLABORATORS: Collaborator[] = [
     activeStatus: 'En Campo',
     currentTaskTitle: 'Mantenimiento Preventivo de Bomba H-4',
     locationName: 'Cuarto de Bombas Nivel -1',
+    countryIds: ['cnt-ar'],
     monthlyPerformance: [
       { month: '2026-05', tasksCompleted: 42, tasksTotal: 45, completionRate: 93.3, avgExecutionTimeMin: 32, targetTimeMin: 35, sopComplianceRate: 98, safetyIncidents: 0 },
       { month: '2026-06', tasksCompleted: 48, tasksTotal: 50, completionRate: 96.0, avgExecutionTimeMin: 30, targetTimeMin: 35, sopComplianceRate: 99, safetyIncidents: 0 },
@@ -331,6 +360,7 @@ export const INITIAL_COLLABORATORS: Collaborator[] = [
     activeStatus: 'En Campo',
     currentTaskTitle: 'Calibración de Sensores de Temperatura',
     locationName: 'Cámara Fría #4',
+    countryIds: ['cnt-mx', 'cnt-br'],
     monthlyPerformance: [
       { month: '2026-05', tasksCompleted: 50, tasksTotal: 50, completionRate: 100.0, avgExecutionTimeMin: 24, targetTimeMin: 30, sopComplianceRate: 100, safetyIncidents: 0 },
       { month: '2026-06', tasksCompleted: 52, tasksTotal: 53, completionRate: 98.1, avgExecutionTimeMin: 23, targetTimeMin: 30, sopComplianceRate: 100, safetyIncidents: 0 },
@@ -347,6 +377,7 @@ export const INITIAL_COLLABORATORS: Collaborator[] = [
     activeStatus: 'En Pausa',
     currentTaskTitle: 'Auditoría de Limpieza y Residuos',
     locationName: 'Zona Acopio Residuos P1',
+    countryIds: ['cnt-cl'],
     monthlyPerformance: [
       { month: '2026-05', tasksCompleted: 35, tasksTotal: 40, completionRate: 87.5, avgExecutionTimeMin: 38, targetTimeMin: 35, sopComplianceRate: 91, safetyIncidents: 1 },
       { month: '2026-06', tasksCompleted: 39, tasksTotal: 42, completionRate: 92.8, avgExecutionTimeMin: 34, targetTimeMin: 35, sopComplianceRate: 95, safetyIncidents: 0 },
@@ -363,6 +394,7 @@ export const INITIAL_COLLABORATORS: Collaborator[] = [
     activeStatus: 'En Campo',
     currentTaskTitle: 'Supervisión de Turno Matutino',
     locationName: 'Planta Principal - Nivel 1',
+    countryIds: ['cnt-ar', 'cnt-co', 'cnt-es'],
     monthlyPerformance: [
       { month: '2026-05', tasksCompleted: 60, tasksTotal: 60, completionRate: 100.0, avgExecutionTimeMin: 20, targetTimeMin: 25, sopComplianceRate: 100, safetyIncidents: 0 },
       { month: '2026-06', tasksCompleted: 64, tasksTotal: 65, completionRate: 98.4, avgExecutionTimeMin: 19, targetTimeMin: 25, sopComplianceRate: 100, safetyIncidents: 0 },

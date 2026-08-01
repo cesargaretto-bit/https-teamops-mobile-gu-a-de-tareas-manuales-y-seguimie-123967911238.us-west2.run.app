@@ -1,27 +1,29 @@
-import React, { useState } from 'react';
-import { 
-  Users, 
-  UserPlus, 
-  Edit3, 
-  Trash2, 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  MapPin, 
-  Mail, 
-  Shield, 
-  Activity, 
-  X, 
-  Grid, 
-  List, 
-  BarChart2, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Users,
+  UserPlus,
+  Edit3,
+  Trash2,
+  Search,
+  Filter,
+  CheckCircle2,
+  MapPin,
+  Mail,
+  Shield,
+  Activity,
+  X,
+  Grid,
+  List,
+  BarChart2,
   AlertTriangle,
   Award,
   Briefcase,
   Check,
   UserCheck,
   Clock,
-  Sparkles
+  Sparkles,
+  Upload,
+  Globe2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -84,8 +86,50 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
     activeStatus: 'En Campo' as 'En Campo' | 'En Pausa' | 'Desconectado',
     avatar: '',
     locationName: 'Planta Principal',
-    countryId: ''
+    countryIds: [] as string[]
   });
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Photos uploaded by the admin (shared library so the same photo can be
+  // reused/assigned to several collaborators). Persisted locally so it
+  // survives reloads.
+  const [uploadedAvatars, setUploadedAvatars] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('teamops_uploaded_avatars');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('teamops_uploaded_avatars', JSON.stringify(uploadedAvatars));
+  }, [uploadedAvatars]);
+
+  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setUploadedAvatars(prev => (prev.includes(dataUrl) ? prev : [dataUrl, ...prev]));
+      setFormData(prevForm => ({ ...prevForm, avatar: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const toggleCountryId = (countryId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      countryIds: prev.countryIds.includes(countryId)
+        ? prev.countryIds.filter(id => id !== countryId)
+        : [...prev.countryIds, countryId]
+    }));
+  };
 
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
@@ -136,7 +180,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
     setEditingCollaborator(null);
     const defaultDept = (departments && departments.length > 0) ? departments[0].name : 'Mantenimiento Mecánico';
     const defaultLocation = (locations && locations.length > 0) ? locations[0].name : 'Planta Principal';
-    const defaultCountry = (countries && countries.length > 0) ? countries[0].id : '';
+    const defaultCountryIds = (countries && countries.length > 0) ? [countries[0].id] : [];
 
     setFormData({
       name: '',
@@ -146,7 +190,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
       activeStatus: 'En Campo',
       avatar: defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)],
       locationName: defaultLocation,
-      countryId: defaultCountry
+      countryIds: defaultCountryIds
     });
     setFormErrors({});
     setIsFormModalOpen(true);
@@ -162,7 +206,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
       activeStatus: collab.activeStatus,
       avatar: collab.avatar || defaultAvatars[0],
       locationName: collab.locationName || 'Planta Principal',
-      countryId: collab.countryId || ''
+      countryIds: collab.countryIds || []
     });
     setFormErrors({});
     setIsFormModalOpen(true);
@@ -182,8 +226,6 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
       return;
     }
 
-    const selectedCountryObj = countries?.find(c => c.id === formData.countryId);
-
     const payload = {
       name: formData.name.trim(),
       email: formData.email.trim(),
@@ -192,9 +234,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
       activeStatus: formData.activeStatus,
       avatar: formData.avatar,
       locationName: formData.locationName.trim(),
-      countryId: selectedCountryObj?.id || formData.countryId,
-      countryName: selectedCountryObj?.name,
-      countryFlag: selectedCountryObj?.flagEmoji
+      countryIds: formData.countryIds
     };
 
     if (editingCollaborator) {
@@ -500,6 +540,24 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                         {c.locationName || 'Nave Principal'}
                       </span>
                     </div>
+
+                    {c.countryIds && c.countryIds.length > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
+                          <Globe2 className="w-3 h-3 text-slate-400" /> Países:
+                        </span>
+                        <span className="flex items-center gap-1 flex-wrap justify-end">
+                          {c.countryIds.map(cid => {
+                            const country = countries.find(cc => cc.id === cid);
+                            return (
+                              <span key={cid} title={country?.name} className="text-sm leading-none">
+                                {country?.flagEmoji || '🌐'}
+                              </span>
+                            );
+                          })}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Task & Performance quick stat */}
@@ -567,6 +625,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                   <th className="py-3.5 px-4">Rol</th>
                   <th className="py-3.5 px-4">Estado Campo</th>
                   <th className="py-3.5 px-4">Ubicación</th>
+                  <th className="py-3.5 px-4">Países</th>
                   <th className="py-3.5 px-4 text-center">Acciones ABM</th>
                 </tr>
               </thead>
@@ -605,6 +664,18 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
 
                     <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
                       {c.locationName || 'Nave Principal'}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <span className="flex items-center gap-1">
+                        {c.countryIds && c.countryIds.length > 0
+                          ? c.countryIds.map(cid => (
+                              <span key={cid} title={countries.find(cc => cc.id === cid)?.name} className="text-sm leading-none">
+                                {countries.find(cc => cc.id === cid)?.flagEmoji || '🌐'}
+                              </span>
+                            ))
+                          : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </span>
                     </td>
 
                     <td className="py-3 px-4 text-center">
@@ -672,20 +743,54 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                   Fotografía de Perfil / Avatar:
                 </label>
                 <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  {/* Upload a real photo, reusable across collaborators */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-10 h-10 shrink-0 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-400 hover:text-emerald-500 hover:border-emerald-500 flex items-center justify-center transition-colors"
+                    title="Subir foto"
+                  >
+                    <Upload className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileUpload}
+                    className="hidden"
+                  />
+
+                  {uploadedAvatars.map((url, idx) => (
+                    <img
+                      key={`uploaded-${idx}`}
+                      src={url}
+                      alt={`Foto subida ${idx}`}
+                      onClick={() => setFormData({ ...formData, avatar: url })}
+                      className={`w-10 h-10 shrink-0 rounded-full object-cover cursor-pointer border-2 transition-all ${
+                        formData.avatar === url
+                          ? 'border-emerald-500 scale-110 shadow-md'
+                          : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                    />
+                  ))}
+
                   {defaultAvatars.map((url, idx) => (
                     <img
                       key={idx}
                       src={url}
                       alt={`Avatar ${idx}`}
                       onClick={() => setFormData({ ...formData, avatar: url })}
-                      className={`w-10 h-10 rounded-full object-cover cursor-pointer border-2 transition-all ${
-                        formData.avatar === url 
-                          ? 'border-emerald-500 scale-110 shadow-md' 
+                      className={`w-10 h-10 shrink-0 rounded-full object-cover cursor-pointer border-2 transition-all ${
+                        formData.avatar === url
+                          ? 'border-emerald-500 scale-110 shadow-md'
                           : 'border-transparent opacity-60 hover:opacity-100'
                       }`}
                     />
                   ))}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Subí una foto propia o elegí una de la galería. Las fotos subidas quedan disponibles para asignárselas a cualquier otro colaborador.
+                </p>
               </div>
 
               {/* Name */}
@@ -807,23 +912,38 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                 </div>
               </div>
 
-              {/* Country Selection */}
+              {/* Country Selection (multi) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  País de la Organización:
+                  Países donde puede operar (podés elegir más de uno):
                 </label>
-                <select
-                  value={formData.countryId}
-                  onChange={(e) => setFormData({ ...formData, countryId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                >
-                  <option value="">-- Sin País Asignado --</option>
-                  {countries && countries.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.flagEmoji || '🌐'} {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                {countries && countries.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                    {countries.map(c => {
+                      const isSelected = formData.countryIds.includes(c.id);
+                      return (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => toggleCountryId(c.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500 border-emerald-500 text-slate-950 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-400'
+                          }`}
+                        >
+                          <span>{c.flagEmoji || '🌐'}</span>
+                          <span>{c.name}</span>
+                          {isSelected && <Check className="w-3 h-3" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <Globe2 className="w-3.5 h-3.5" /> No hay países cargados en el Módulo ABM todavía.
+                  </p>
+                )}
               </div>
 
               {/* Submit / Cancel Footer */}

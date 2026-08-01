@@ -86,10 +86,15 @@ export interface Collaborator {
   activeStatus: 'En Campo' | 'En Pausa' | 'Desconectado';
   currentTaskTitle?: string;
   locationName?: string;
-  countryId?: string;
-  countryName?: string;
-  countryFlag?: string;
+  /** IDs of every Country (see Country.id) this collaborator is authorized to operate in. */
+  countryIds: string[];
   monthlyPerformance: MonthlyPerformance[];
+}
+
+export interface CountryFlagPreset {
+  code: string;
+  name: string;
+  flagEmoji: string;
 }
 
 export interface Country {

@@ -36,6 +36,7 @@ import {
 } from '../types';
 import { CollaboratorsManager } from './CollaboratorsManager';
 import { getThemeClasses } from '../utils/helpers';
+import { COUNTRY_FLAG_PRESETS } from '../data/mockData';
 
 interface AbmManagementHubProps {
   countries: Country[];
@@ -384,7 +385,7 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
               )
               .map((country) => {
                 const linkedTasksCount = tasks.filter(t => t.countryId === country.id || t.countryName === country.name).length;
-                const linkedCollabsCount = collaborators.filter(c => c.countryId === country.id || c.countryName === country.name).length;
+                const linkedCollabsCount = collaborators.filter(c => c.countryIds?.includes(country.id)).length;
 
                 return (
                   <div 
@@ -785,6 +786,36 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
             {/* FORM PAÍS */}
             {modalType === 'country' && (
               <form onSubmit={handleSaveCountry} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Selector Visual de Bandera (opcional):
+                  </label>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const preset = COUNTRY_FLAG_PRESETS.find(p => p.code === e.target.value);
+                      if (preset) {
+                        setCountryForm({
+                          ...countryForm,
+                          name: countryForm.name || preset.name,
+                          code: preset.code,
+                          flagEmoji: preset.flagEmoji
+                        });
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white font-semibold"
+                  >
+                    <option value="">-- Elegí un país para autocompletar código y bandera --</option>
+                    {COUNTRY_FLAG_PRESETS.map(p => (
+                      <option key={p.code} value={p.code}>
+                        {p.flagEmoji} {p.name} ({p.code})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Elegilo de la lista para completar automáticamente el código ISO y la bandera de abajo. Después podés editar cualquier campo a mano si lo necesitás.
+                  </p>
+                </div>
                 <div>
                   <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">Nombre del País:</label>
                   <input
