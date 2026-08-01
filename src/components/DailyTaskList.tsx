@@ -24,7 +24,7 @@ import {
   Repeat
 } from 'lucide-react';
 import { Task, Category, Priority, TaskStatus, ThemeConfig, Country } from '../types';
-import { getThemeClasses } from '../utils/helpers';
+import { getThemeClasses, computeMinutesBetween } from '../utils/helpers';
 import { TaskAgendaView } from './TaskAgendaView';
 
 interface DailyTaskListProps {
@@ -179,6 +179,27 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       if (activeTaskDetail?.id === task.id) {
         setActiveTaskDetail(updatedTask);
       }
+    }
+  };
+
+  // Start/End Time Tracking: when both times are set, actualMinutes is
+  // recalculated automatically from the real elapsed time (used later for
+  // productivity, efficiency & workload reports).
+  const handleTimeRangeChange = (task: Task, field: 'startTime' | 'endTime', value: string) => {
+    const updatedFields = { [field]: value } as Pick<Task, 'startTime' | 'endTime'>;
+    const nextStartTime = field === 'startTime' ? value : task.startTime;
+    const nextEndTime = field === 'endTime' ? value : task.endTime;
+    const computedMinutes = computeMinutesBetween(nextStartTime, nextEndTime);
+
+    const updatedTask: Task = {
+      ...task,
+      ...updatedFields,
+      actualMinutes: computedMinutes !== null ? computedMinutes : task.actualMinutes,
+      synced: isOnline
+    };
+    onUpdateTask(updatedTask);
+    if (activeTaskDetail?.id === task.id) {
+      setActiveTaskDetail(updatedTask);
     }
   };
 
@@ -613,6 +634,39 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                     <option value="mensual">🗓️ Mensual</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Time Tracking Panel: start/end time -> auto-computed duration,
+                  used to measure productivity, efficiency and workload per collaborator */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> Registro de Horario de Ejecución
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Hora de Inicio:</label>
+                    <input
+                      type="time"
+                      value={activeTaskDetail.startTime || ''}
+                      onChange={(e) => handleTimeRangeChange(activeTaskDetail, 'startTime', e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Hora de Fin:</label>
+                    <input
+                      type="time"
+                      value={activeTaskDetail.endTime || ''}
+                      onChange={(e) => handleTimeRangeChange(activeTaskDetail, 'endTime', e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono font-semibold"
+                    />
+                  </div>
+                </div>
+                {activeTaskDetail.startTime && activeTaskDetail.endTime && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Duración registrada: <strong className="text-slate-700 dark:text-slate-200 font-mono">{activeTaskDetail.actualMinutes} min</strong> (vs. {activeTaskDetail.estimatedMinutes} min estimados)
+                  </p>
+                )}
               </div>
 
               {/* Linked SOP Manual if available */}

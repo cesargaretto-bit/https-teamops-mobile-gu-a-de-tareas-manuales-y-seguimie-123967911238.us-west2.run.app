@@ -64,13 +64,45 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
     { name: 'Bloqueadas', value: blockedTasks, color: '#ef4444' }
   ];
 
-  // Chart Data: Department Performance Comparison
-  const deptPerformanceData = [
-    { department: 'Mantenimiento', completadas: 38, objetivo: 40, tasa: 95 },
-    { department: 'Calidad', completadas: 44, objetivo: 45, tasa: 98 },
-    { department: 'Seguridad', completadas: 31, objetivo: 36, tasa: 86 },
-    { department: 'Operaciones', completadas: 55, objetivo: 56, tasa: 98 }
-  ];
+  // Chart Data: Department Performance Comparison — computed live from the
+  // actual tasks assigned to each department's collaborators (previously this
+  // was hardcoded sample data and never reflected real changes).
+  const departmentOf = (userId: string) => collaborators.find(c => c.id === userId)?.department || 'Sin Departamento';
+  const deptTally: Record<string, { total: number; completadas: number }> = {};
+  tasks.forEach(t => {
+    const dept = departmentOf(t.assignedUserId);
+    if (!deptTally[dept]) deptTally[dept] = { total: 0, completadas: 0 };
+    deptTally[dept].total += 1;
+    if (t.status === 'completed') deptTally[dept].completadas += 1;
+  });
+  const deptPerformanceData = Object.entries(deptTally).map(([department, v]) => ({
+    department,
+    completadas: v.completadas,
+    objetivo: v.total,
+    tasa: v.total > 0 ? Math.round((v.completadas / v.total) * 100) : 0
+  }));
+
+  // Live field-status counts for the KPI card (previously hardcoded "3 en campo, 1 en pausa")
+  const inFieldNow = collaborators.filter(c => c.activeStatus === 'En Campo').length;
+  const inPauseNow = collaborators.filter(c => c.activeStatus === 'En Pausa').length;
+
+  // Compliance trend: average completion rate of the latest month vs. the
+  // previous one across every collaborator's monthly performance history.
+  const avgRateForMonthOffset = (offsetFromLatest: number): number | null => {
+    const rates = collaborators
+      .map(c => {
+        const idx = c.monthlyPerformance.length - 1 - offsetFromLatest;
+        return c.monthlyPerformance[idx]?.completionRate;
+      })
+      .filter((r): r is number => typeof r === 'number');
+    if (rates.length === 0) return null;
+    return rates.reduce((a, b) => a + b, 0) / rates.length;
+  };
+  const latestAvgRate = avgRateForMonthOffset(0);
+  const prevAvgRate = avgRateForMonthOffset(1);
+  const complianceTrend = latestAvgRate !== null && prevAvgRate !== null
+    ? Math.round((latestAvgRate - prevAvgRate) * 10) / 10
+    : null;
 
   return (
     <div className="space-y-6">
@@ -122,8 +154,12 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
           <div className="text-2xl font-black text-slate-900 dark:text-white">
             {globalCompletionRate}%
           </div>
-          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-            ↑ 3.2% vs. mes anterior
+          <div className={`text-[11px] font-medium ${
+            complianceTrend === null ? 'text-slate-400' : complianceTrend >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+          }`}>
+            {complianceTrend === null
+              ? `Sobre ${totalTasks} tareas registradas`
+              : `${complianceTrend >= 0 ? '↑' : '↓'} ${Math.abs(complianceTrend)}% vs. mes anterior`}
           </div>
         </div>
 
@@ -162,7 +198,7 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
             {collaborators.filter(c => c.activeStatus !== 'Desconectado').length} / {collaborators.length}
           </div>
           <div className="text-[11px] text-slate-400">
-            3 en campo, 1 en pausa
+            {inFieldNow} en campo, {inPauseNow} en pausa
           </div>
         </div>
       </div>

@@ -56,6 +56,70 @@ import { SettingsAndSecurityModal } from './components/SettingsAndSecurityModal'
 import { CreateTaskModal } from './components/CreateTaskModal';
 import { UserProfileLoginModal, UserSession } from './components/UserProfileLoginModal';
 
+// Generic helpers reused for every ABM master catalog (countries, roles,
+// departments, statuses, locations) so they follow the exact same
+// load-once-then-realtime-sync pattern already used for tasks/collaborators.
+type WithId = { id: string };
+
+async function loadCloudCatalog<T extends WithId>(
+  table: string,
+  initialData: T[],
+  setState: (items: T[]) => void
+) {
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select('payload')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      setState(data.map((r: any) => r.payload as T));
+    } else {
+      // First run: seed the shared database with the sample catalog.
+      setState(initialData);
+      await supabase.from(table).upsert(
+        initialData.map(item => ({ id: item.id, payload: item, updated_at: new Date().toISOString() }))
+      );
+    }
+  } catch (e) {
+    console.error(`No se pudo cargar "${table}" desde Supabase, usando datos de ejemplo locales.`, e);
+    setState(initialData);
+  }
+}
+
+function subscribeCloudCatalog<T extends WithId>(
+  table: string,
+  setState: React.Dispatch<React.SetStateAction<T[]>>
+) {
+  return supabase
+    .channel(`${table}-realtime`)
+    .on('postgres_changes', { event: '*', schema: 'public', table }, (payload: any) => {
+      if (payload.eventType === 'DELETE') {
+        setState(prev => prev.filter(item => item.id !== payload.old.id));
+      } else {
+        const updated = payload.new.payload as T;
+        setState(prev => {
+          const exists = prev.some(item => item.id === updated.id);
+          return exists ? prev.map(item => (item.id === updated.id ? updated : item)) : [updated, ...prev];
+        });
+      }
+    })
+    .subscribe();
+}
+
+async function upsertCloudItem<T extends WithId>(table: string, item: T) {
+  const { error } = await supabase
+    .from(table)
+    .upsert({ id: item.id, payload: item, updated_at: new Date().toISOString() });
+  if (error) console.error(`Error al guardar en "${table}" (Supabase):`, error);
+}
+
+async function deleteCloudItem(table: string, id: string) {
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (error) console.error(`Error al eliminar de "${table}" (Supabase):`, error);
+}
+
 export default function App() {
   // Tasks & Collaborators now live in Supabase (shared cloud database) so that
   // every user, on every device, reads and writes the same data in real time.
@@ -65,52 +129,15 @@ export default function App() {
   const [procedures, setProcedures] = useState<Procedure[]>(INITIAL_PROCEDURES);
 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  
-  // ABM Catalogs State with localStorage persistence
-  const [countries, setCountries] = useState<Country[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_countries');
-      return saved ? JSON.parse(saved) : INITIAL_COUNTRIES;
-    } catch {
-      return INITIAL_COUNTRIES;
-    }
-  });
 
-  const [roles, setRoles] = useState<RoleDefinition[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_roles');
-      return saved ? JSON.parse(saved) : INITIAL_ROLES;
-    } catch {
-      return INITIAL_ROLES;
-    }
-  });
-
-  const [departments, setDepartments] = useState<DepartmentDefinition[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_departments');
-      return saved ? JSON.parse(saved) : INITIAL_DEPARTMENTS;
-    } catch {
-      return INITIAL_DEPARTMENTS;
-    }
-  });
-
-  const [statuses, setStatuses] = useState<StatusDefinition[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_statuses');
-      return saved ? JSON.parse(saved) : INITIAL_STATUSES;
-    } catch {
-      return INITIAL_STATUSES;
-    }
-  });
-
-  const [locations, setLocations] = useState<LocationDefinition[]>(() => {
-    try {
-      const saved = localStorage.getItem('teamops_locations');
-      return saved ? JSON.parse(saved) : INITIAL_LOCATIONS;
-    } catch {
-      return INITIAL_LOCATIONS;
-    }
-  });
+  // ABM Master Catalogs — now shared cloud data (Supabase), same pattern as
+  // tasks/collaborators: loaded once, then kept live via Realtime so a change
+  // any admin makes shows up for everyone immediately.
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const [departments, setDepartments] = useState<DepartmentDefinition[]>([]);
+  const [statuses, setStatuses] = useState<StatusDefinition[]>([]);
+  const [locations, setLocations] = useState<LocationDefinition[]>([]);
 
   // User Profile & Active Session State
   const [currentUser, setCurrentUser] = useState<UserSession | null>(() => {
@@ -154,6 +181,11 @@ export default function App() {
       // Fallback for local/dev environments without Supabase configured yet.
       setTasks(INITIAL_TASKS);
       setCollaborators(INITIAL_COLLABORATORS);
+      setCountries(INITIAL_COUNTRIES);
+      setRoles(INITIAL_ROLES);
+      setDepartments(INITIAL_DEPARTMENTS);
+      setStatuses(INITIAL_STATUSES);
+      setLocations(INITIAL_LOCATIONS);
       setIsCloudDataLoaded(true);
       return;
     }
@@ -199,9 +231,18 @@ export default function App() {
       } catch (e) {
         console.error('No se pudo cargar colaboradores desde Supabase, usando datos de ejemplo locales.', e);
         if (isMounted) setCollaborators(INITIAL_COLLABORATORS);
-      } finally {
-        if (isMounted) setIsCloudDataLoaded(true);
       }
+
+      // ABM master catalogs: same load-or-seed pattern as tasks/collaborators.
+      await Promise.all([
+        loadCloudCatalog('countries', INITIAL_COUNTRIES, (items) => { if (isMounted) setCountries(items); }),
+        loadCloudCatalog('roles', INITIAL_ROLES, (items) => { if (isMounted) setRoles(items); }),
+        loadCloudCatalog('departments', INITIAL_DEPARTMENTS, (items) => { if (isMounted) setDepartments(items); }),
+        loadCloudCatalog('statuses', INITIAL_STATUSES, (items) => { if (isMounted) setStatuses(items); }),
+        loadCloudCatalog('locations', INITIAL_LOCATIONS, (items) => { if (isMounted) setLocations(items); })
+      ]);
+
+      if (isMounted) setIsCloudDataLoaded(true);
     };
 
     loadData();
@@ -237,19 +278,25 @@ export default function App() {
       })
       .subscribe();
 
+    // Realtime for every ABM master catalog.
+    const countriesChannel = subscribeCloudCatalog<Country>('countries', setCountries);
+    const rolesChannel = subscribeCloudCatalog<RoleDefinition>('roles', setRoles);
+    const departmentsChannel = subscribeCloudCatalog<DepartmentDefinition>('departments', setDepartments);
+    const statusesChannel = subscribeCloudCatalog<StatusDefinition>('statuses', setStatuses);
+    const locationsChannel = subscribeCloudCatalog<LocationDefinition>('locations', setLocations);
+
     return () => {
       isMounted = false;
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(collabChannel);
+      supabase.removeChannel(countriesChannel);
+      supabase.removeChannel(rolesChannel);
+      supabase.removeChannel(departmentsChannel);
+      supabase.removeChannel(statusesChannel);
+      supabase.removeChannel(locationsChannel);
     };
   }, []);
 
-  // Persist states to localStorage (ABM master catalogs stay local/per-admin for now)
-  useEffect(() => { localStorage.setItem('teamops_countries', JSON.stringify(countries)); }, [countries]);
-  useEffect(() => { localStorage.setItem('teamops_roles', JSON.stringify(roles)); }, [roles]);
-  useEffect(() => { localStorage.setItem('teamops_departments', JSON.stringify(departments)); }, [departments]);
-  useEffect(() => { localStorage.setItem('teamops_statuses', JSON.stringify(statuses)); }, [statuses]);
-  useEffect(() => { localStorage.setItem('teamops_locations', JSON.stringify(locations)); }, [locations]);
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('teamops_currentUser', JSON.stringify(currentUser));
@@ -470,82 +517,97 @@ export default function App() {
   };
 
   // ABM Countries Handlers
-  const handleAddCountry = (c: Omit<Country, 'id'>) => {
+  const handleAddCountry = async (c: Omit<Country, 'id'>) => {
     const newCountry: Country = { ...c, id: `cnt-${Date.now()}` };
     setCountries(prev => [...prev, newCountry]);
+    if (isSupabaseConfigured) await upsertCloudItem('countries', newCountry);
     showToast(`✨ País ${newCountry.name} (${newCountry.code}) registrado en el catálogo maestro.`);
   };
-  const handleUpdateCountry = (c: Country) => {
+  const handleUpdateCountry = async (c: Country) => {
     setCountries(prev => prev.map(item => item.id === c.id ? c : item));
+    if (isSupabaseConfigured) await upsertCloudItem('countries', c);
     showToast(`✓ País ${c.name} actualizado.`);
   };
-  const handleDeleteCountry = (id: string) => {
+  const handleDeleteCountry = async (id: string) => {
     const target = countries.find(c => c.id === id);
     setCountries(prev => prev.filter(c => c.id !== id));
+    if (isSupabaseConfigured) await deleteCloudItem('countries', id);
     showToast(`🗑️ País ${target?.name || ''} eliminado.`);
   };
 
   // ABM Roles Handlers
-  const handleAddRole = (r: Omit<RoleDefinition, 'id'>) => {
+  const handleAddRole = async (r: Omit<RoleDefinition, 'id'>) => {
     const newRole: RoleDefinition = { ...r, id: `rol-${Date.now()}` };
     setRoles(prev => [...prev, newRole]);
+    if (isSupabaseConfigured) await upsertCloudItem('roles', newRole);
     showToast(`✨ Rol ${newRole.title} registrado.`);
   };
-  const handleUpdateRole = (r: RoleDefinition) => {
+  const handleUpdateRole = async (r: RoleDefinition) => {
     setRoles(prev => prev.map(item => item.id === r.id ? r : item));
+    if (isSupabaseConfigured) await upsertCloudItem('roles', r);
     showToast(`✓ Rol ${r.title} actualizado.`);
   };
-  const handleDeleteRole = (id: string) => {
+  const handleDeleteRole = async (id: string) => {
     const target = roles.find(r => r.id === id);
     setRoles(prev => prev.filter(r => r.id !== id));
+    if (isSupabaseConfigured) await deleteCloudItem('roles', id);
     showToast(`🗑️ Rol ${target?.title || ''} eliminado.`);
   };
 
   // ABM Departments Handlers
-  const handleAddDepartment = (d: Omit<DepartmentDefinition, 'id'>) => {
+  const handleAddDepartment = async (d: Omit<DepartmentDefinition, 'id'>) => {
     const newDept: DepartmentDefinition = { ...d, id: `dep-${Date.now()}` };
     setDepartments(prev => [...prev, newDept]);
+    if (isSupabaseConfigured) await upsertCloudItem('departments', newDept);
     showToast(`✨ Departamento ${newDept.name} registrado.`);
   };
-  const handleUpdateDepartment = (d: DepartmentDefinition) => {
+  const handleUpdateDepartment = async (d: DepartmentDefinition) => {
     setDepartments(prev => prev.map(item => item.id === d.id ? d : item));
+    if (isSupabaseConfigured) await upsertCloudItem('departments', d);
     showToast(`✓ Departamento ${d.name} actualizado.`);
   };
-  const handleDeleteDepartment = (id: string) => {
+  const handleDeleteDepartment = async (id: string) => {
     const target = departments.find(d => d.id === id);
     setDepartments(prev => prev.filter(d => d.id !== id));
+    if (isSupabaseConfigured) await deleteCloudItem('departments', id);
     showToast(`🗑️ Departamento ${target?.name || ''} eliminado.`);
   };
 
   // ABM Statuses Handlers
-  const handleAddStatus = (s: Omit<StatusDefinition, 'id'>) => {
+  const handleAddStatus = async (s: Omit<StatusDefinition, 'id'>) => {
     const newStatus: StatusDefinition = { ...s, id: `st-${Date.now()}` };
     setStatuses(prev => [...prev, newStatus]);
+    if (isSupabaseConfigured) await upsertCloudItem('statuses', newStatus);
     showToast(`✨ Estado ${newStatus.label} registrado.`);
   };
-  const handleUpdateStatus = (s: StatusDefinition) => {
+  const handleUpdateStatus = async (s: StatusDefinition) => {
     setStatuses(prev => prev.map(item => item.id === s.id ? s : item));
+    if (isSupabaseConfigured) await upsertCloudItem('statuses', s);
     showToast(`✓ Estado ${s.label} actualizado.`);
   };
-  const handleDeleteStatus = (id: string) => {
+  const handleDeleteStatus = async (id: string) => {
     const target = statuses.find(s => s.id === id);
     setStatuses(prev => prev.filter(s => s.id !== id));
+    if (isSupabaseConfigured) await deleteCloudItem('statuses', id);
     showToast(`🗑️ Estado ${target?.label || ''} eliminado.`);
   };
 
   // ABM Locations Handlers
-  const handleAddLocation = (l: Omit<LocationDefinition, 'id'>) => {
+  const handleAddLocation = async (l: Omit<LocationDefinition, 'id'>) => {
     const newLoc: LocationDefinition = { ...l, id: `loc-${Date.now()}` };
     setLocations(prev => [...prev, newLoc]);
+    if (isSupabaseConfigured) await upsertCloudItem('locations', newLoc);
     showToast(`✨ Ubicación ${newLoc.name} registrada.`);
   };
-  const handleUpdateLocation = (l: LocationDefinition) => {
+  const handleUpdateLocation = async (l: LocationDefinition) => {
     setLocations(prev => prev.map(item => item.id === l.id ? l : item));
+    if (isSupabaseConfigured) await upsertCloudItem('locations', l);
     showToast(`✓ Ubicación ${l.name} actualizada.`);
   };
-  const handleDeleteLocation = (id: string) => {
+  const handleDeleteLocation = async (id: string) => {
     const target = locations.find(l => l.id === id);
     setLocations(prev => prev.filter(l => l.id !== id));
+    if (isSupabaseConfigured) await deleteCloudItem('locations', id);
     showToast(`🗑️ Ubicación ${target?.name || ''} eliminada.`);
   };
 

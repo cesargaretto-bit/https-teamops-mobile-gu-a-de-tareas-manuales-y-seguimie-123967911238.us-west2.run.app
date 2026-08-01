@@ -1,17 +1,32 @@
 import React, { useState } from 'react';
-import { 
-  FileSpreadsheet, 
-  FileText, 
-  Download, 
-  Printer, 
-  Award, 
-  Calendar, 
-  CheckCircle2, 
-  Clock, 
-  ShieldCheck, 
-  BarChart3, 
-  UserCheck 
+import {
+  FileSpreadsheet,
+  FileText,
+  Download,
+  Printer,
+  Award,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  BarChart3,
+  UserCheck,
+  TrendingUp,
+  Timer,
+  Gauge
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart as ReBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend
+} from 'recharts';
 import { Task, Collaborator, ThemeConfig } from '../types';
 import { exportTasksToCSV, exportCollaboratorsToCSV, generatePDFReport, getThemeClasses } from '../utils/helpers';
 
@@ -28,6 +43,48 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 }) => {
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-07');
   const theme = getThemeClasses(themeConfig.primaryColor);
+
+  // --- KPI Chart 1: Monthly compliance trend (team average completion rate per month) ---
+  const monthsSeen = Array.from(
+    new Set(collaborators.flatMap(c => c.monthlyPerformance.map(m => m.month)))
+  ).sort();
+  const complianceTrendData = monthsSeen.map(month => {
+    const entries = collaborators
+      .map(c => c.monthlyPerformance.find(m => m.month === month))
+      .filter((m): m is NonNullable<typeof m> => Boolean(m));
+    const avgCompletion = entries.length
+      ? Math.round((entries.reduce((sum, e) => sum + e.completionRate, 0) / entries.length) * 10) / 10
+      : 0;
+    const avgSopCompliance = entries.length
+      ? Math.round((entries.reduce((sum, e) => sum + e.sopComplianceRate, 0) / entries.length) * 10) / 10
+      : 0;
+    return { month, 'Cumplimiento (%)': avgCompletion, 'Apego a SOP (%)': avgSopCompliance };
+  });
+
+  // --- KPI Chart 2: Time efficiency per collaborator (real vs. estimated minutes) ---
+  // Only counts tasks with actual work time logged (actualMinutes > 0), which is
+  // populated automatically once a collaborator sets a start/end time on a task.
+  const efficiencyData = collaborators.map(c => {
+    const theirTasks = tasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
+    const realMin = theirTasks.reduce((sum, t) => sum + t.actualMinutes, 0);
+    const estMin = theirTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0);
+    const efficiency = realMin > 0 ? Math.round((estMin / realMin) * 100) : 0;
+    return {
+      name: c.name.split(' ')[0],
+      'Tiempo Real (min)': realMin,
+      'Tiempo Estimado (min)': estMin,
+      eficiencia: efficiency,
+      tasksWithTime: theirTasks.length
+    };
+  }).filter(d => d.tasksWithTime > 0);
+
+  // --- KPI Chart 3: Workload (carga horaria) — total minutes worked per collaborator across all logged tasks ---
+  const workloadData = collaborators.map(c => {
+    const totalMin = tasks
+      .filter(t => t.assignedUserId === c.id && t.actualMinutes > 0)
+      .reduce((sum, t) => sum + t.actualMinutes, 0);
+    return { name: c.name.split(' ')[0], 'Horas Trabajadas': Math.round((totalMin / 60) * 10) / 10 };
+  }).filter(d => d['Horas Trabajadas'] > 0);
 
   return (
     <div className="space-y-6">
@@ -91,6 +148,87 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
           <option value="2026-06">Junio 2026</option>
           <option value="2026-05">Mayo 2026</option>
         </select>
+      </div>
+
+      {/* KPI Charts: Compliance & Efficiency Indicators */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Chart 1: Monthly Compliance Trend */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-500" />
+            Tendencia de Cumplimiento y Apego a SOP (Promedio del Equipo)
+          </h3>
+          {complianceTrendData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={complianceTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Line type="monotone" dataKey="Cumplimiento (%)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="Apego a SOP (%)" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">Aún no hay historial mensual suficiente para graficar la tendencia.</p>
+          )}
+        </div>
+
+        {/* Chart 2: Time Efficiency per Collaborator */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-emerald-500" />
+            Eficiencia de Tiempo (Real vs. Estimado)
+          </h3>
+          {efficiencyData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={efficiencyData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="Tiempo Estimado (min)" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Tiempo Real (min)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">
+              Todavía no hay tareas con hora de inicio y fin registradas. Se completa automáticamente cuando un colaborador carga su horario en el detalle de la tarea.
+            </p>
+          )}
+          <p className="text-[10px] text-slate-400">
+            Eficiencia = tiempo estimado ÷ tiempo real. Por encima de 100% significa que se resolvió más rápido que lo planificado.
+          </p>
+        </div>
+
+        {/* Chart 3: Workload (carga horaria) per Collaborator */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <Timer className="w-4 h-4 text-emerald-500" />
+            Carga Horaria por Colaborador (horas trabajadas)
+          </h3>
+          {workloadData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={workloadData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} />
+                  <Tooltip />
+                  <Bar dataKey="Horas Trabajadas" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">Sin datos de horario registrados todavía.</p>
+          )}
+        </div>
       </div>
 
       {/* Collaborator Performance Detailed Cards Table */}

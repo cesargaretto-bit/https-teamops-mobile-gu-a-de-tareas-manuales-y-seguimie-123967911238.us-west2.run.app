@@ -307,3 +307,17 @@ export function getThemeClasses(color: PrimaryColorTheme) {
       };
   }
 }
+
+// Computes the whole-minute difference between two "HH:MM" times (same-day).
+// Returns null if either time is missing/invalid. Assumes endTime >= startTime;
+// if endTime looks earlier than startTime (crossed midnight), it wraps +24h.
+export function computeMinutesBetween(startTime?: string, endTime?: string): number | null {
+  if (!startTime || !endTime) return null;
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  if ([sh, sm, eh, em].some(n => Number.isNaN(n))) return null;
+
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60; // shift worked overnight
+  return diff;
+}

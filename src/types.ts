@@ -24,6 +24,10 @@ export interface Task {
   procedureRefTitle?: string;
   estimatedMinutes: number;
   actualMinutes: number;
+  /** Time of day (HH:MM, 24h) when the collaborator started executing the task. */
+  startTime?: string;
+  /** Time of day (HH:MM, 24h) when the collaborator finished executing the task. */
+  endTime?: string;
   steps: TaskStep[];
   notes: string;
   proofImageUrl?: string;
