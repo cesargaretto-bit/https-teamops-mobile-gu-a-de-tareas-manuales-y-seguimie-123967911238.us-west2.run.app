@@ -791,16 +791,16 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
                     Selector Visual de Bandera (opcional):
                   </label>
                   <select
-                    value=""
+                    value={COUNTRY_FLAG_PRESETS.some(p => p.code === countryForm.code) ? countryForm.code : ''}
                     onChange={(e) => {
                       const preset = COUNTRY_FLAG_PRESETS.find(p => p.code === e.target.value);
                       if (preset) {
-                        setCountryForm({
-                          ...countryForm,
-                          name: countryForm.name || preset.name,
+                        setCountryForm(prev => ({
+                          ...prev,
+                          name: prev.name || preset.name,
                           code: preset.code,
                           flagEmoji: preset.flagEmoji
-                        });
+                        }));
                       }
                     }}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white font-semibold"
@@ -812,6 +812,12 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
                       </option>
                     ))}
                   </select>
+                  {countryForm.flagEmoji && (
+                    <p className="text-xs mt-1 flex items-center gap-1.5">
+                      <span className="text-slate-400">Bandera actual:</span>
+                      <span className="text-lg leading-none">{countryForm.flagEmoji}</span>
+                    </p>
+                  )}
                   <p className="text-[10px] text-slate-400 mt-1">
                     Elegilo de la lista para completar automáticamente el código ISO y la bandera de abajo. Después podés editar cualquier campo a mano si lo necesitás.
                   </p>

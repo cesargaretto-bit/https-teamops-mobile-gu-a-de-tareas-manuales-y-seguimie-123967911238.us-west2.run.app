@@ -122,6 +122,13 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
     e.target.value = '';
   };
 
+  const handleRemoveUploadedAvatar = (url: string) => {
+    setUploadedAvatars(prev => prev.filter(a => a !== url));
+    // If the collaborator being edited/created currently has that photo selected,
+    // fall back to a default avatar so the form never points to a deleted image.
+    setFormData(prev => (prev.avatar === url ? { ...prev, avatar: defaultAvatars[0] } : prev));
+  };
+
   const toggleCountryId = (countryId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -761,17 +768,29 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                   />
 
                   {uploadedAvatars.map((url, idx) => (
-                    <img
-                      key={`uploaded-${idx}`}
-                      src={url}
-                      alt={`Foto subida ${idx}`}
-                      onClick={() => setFormData({ ...formData, avatar: url })}
-                      className={`w-10 h-10 shrink-0 rounded-full object-cover cursor-pointer border-2 transition-all ${
-                        formData.avatar === url
-                          ? 'border-emerald-500 scale-110 shadow-md'
-                          : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                    />
+                    <div key={`uploaded-${idx}`} className="relative shrink-0 group/avatar">
+                      <img
+                        src={url}
+                        alt={`Foto subida ${idx}`}
+                        onClick={() => setFormData({ ...formData, avatar: url })}
+                        className={`w-10 h-10 rounded-full object-cover cursor-pointer border-2 transition-all ${
+                          formData.avatar === url
+                            ? 'border-emerald-500 scale-110 shadow-md'
+                            : 'border-transparent opacity-60 hover:opacity-100'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveUploadedAvatar(url);
+                        }}
+                        title="Eliminar esta foto subida"
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity shadow"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
                   ))}
 
                   {defaultAvatars.map((url, idx) => (
