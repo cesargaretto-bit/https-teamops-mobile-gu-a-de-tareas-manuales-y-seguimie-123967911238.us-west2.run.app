@@ -23,7 +23,7 @@ import {
   Calendar,
   Repeat
 } from 'lucide-react';
-import { Task, Category, Priority, TaskStatus, ThemeConfig, Country } from '../types';
+import { Task, Category, Priority, TaskStatus, ThemeConfig, Country, Collaborator } from '../types';
 import { getThemeClasses, computeMinutesBetween } from '../utils/helpers';
 import { TaskAgendaView } from './TaskAgendaView';
 
@@ -35,6 +35,7 @@ interface DailyTaskListProps {
   themeConfig: ThemeConfig;
   isOnline: boolean;
   countries?: Country[];
+  collaborators?: Collaborator[];
   onDeleteTask?: (taskId: string, deleteAllSeries?: boolean) => void;
   currentRole?: string;
   currentUser?: { role?: string; name?: string } | null;
@@ -48,6 +49,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   themeConfig,
   isOnline,
   countries = [],
+  collaborators = [],
   onDeleteTask,
   currentRole,
   currentUser
@@ -59,6 +61,8 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>([]);
+  const [isCollaboratorFilterOpen, setIsCollaboratorFilterOpen] = useState(false);
   const [taskDisplayMode, setTaskDisplayMode] = useState<'cards' | 'list' | 'agenda'>('cards');
   const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
   const [activeTimerTaskId, setActiveTimerTaskId] = useState<string | null>(null);
@@ -67,11 +71,28 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
 
   const theme = getThemeClasses(themeConfig.primaryColor);
 
-  const canDelete = 
-    currentRole === 'admin' || 
-    currentRole === 'supervisor' || 
-    currentUser?.role === 'admin' || 
+  const canDelete =
+    currentRole === 'admin' ||
+    currentRole === 'supervisor' ||
+    currentUser?.role === 'admin' ||
     currentUser?.role === 'supervisor';
+
+  // Manager-level filter by collaborator: available to Admin, Supervisor and
+  // any custom role named/coded "Gerente" (Manager) created in the Roles ABM.
+  const roleLabel = `${currentRole || ''} ${currentUser?.role || ''}`.toLowerCase();
+  const isManagerView =
+    currentRole === 'admin' ||
+    currentRole === 'supervisor' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'supervisor' ||
+    roleLabel.includes('gerente') ||
+    roleLabel.includes('manager');
+
+  const toggleCollaboratorFilter = (collabId: string) => {
+    setSelectedCollaboratorIds(prev =>
+      prev.includes(collabId) ? prev.filter(id => id !== collabId) : [...prev, collabId]
+    );
+  };
 
   // Calculate matching recurring series count when setTaskToDelete is active
   const seriesTasksCount = React.useMemo(() => {
@@ -110,7 +131,10 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
     const matchesDateFrom = !dateFrom || (task.dueDate && task.dueDate >= dateFrom);
     const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo;
+    const matchesCollaborator =
+      selectedCollaboratorIds.length === 0 || selectedCollaboratorIds.includes(task.assignedUserId);
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo && matchesCollaborator;
   });
 
   // Handle Step Checkbox Toggle
@@ -374,6 +398,60 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
             >
               ✕ Limpiar
             </button>
+          )}
+
+          {isManagerView && collaborators.length > 0 && (
+            <div className="relative">
+              <span className="text-slate-500 dark:text-slate-400 font-medium ml-2 mr-1 inline-flex items-center gap-1">
+                👤 Colaborador:
+              </span>
+              <button
+                onClick={() => setIsCollaboratorFilterOpen(o => !o)}
+                className={`px-2.5 py-1 rounded-md font-semibold text-xs border ${
+                  selectedCollaboratorIds.length > 0
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {selectedCollaboratorIds.length === 0
+                  ? 'Todos'
+                  : `${selectedCollaboratorIds.length} seleccionado${selectedCollaboratorIds.length > 1 ? 's' : ''}`}
+                {' '}▾
+              </button>
+
+              {isCollaboratorFilterOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsCollaboratorFilterOpen(false)} />
+                  <div className="absolute z-20 mt-1 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 space-y-0.5">
+                    <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-700">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Filtrar por colaborador</span>
+                      {selectedCollaboratorIds.length > 0 && (
+                        <button
+                          onClick={() => setSelectedCollaboratorIds([])}
+                          className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Limpiar
+                        </button>
+                      )}
+                    </div>
+                    {collaborators.map(c => (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/60 cursor-pointer text-xs text-slate-700 dark:text-slate-200"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedCollaboratorIds.includes(c.id)}
+                          onChange={() => toggleCollaboratorFilter(c.id)}
+                          className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="truncate">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

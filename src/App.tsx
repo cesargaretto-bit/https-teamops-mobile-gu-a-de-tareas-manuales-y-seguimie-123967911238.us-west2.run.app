@@ -715,6 +715,7 @@ export default function App() {
                   themeConfig={themeConfig}
                   isOnline={isOnline}
                   countries={countries}
+                  collaborators={collaborators}
                 />
               )}
 
