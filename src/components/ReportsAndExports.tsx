@@ -41,13 +41,31 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   tasks,
   themeConfig
 }) => {
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-07');
+  // Current month, computed live so the period selector always includes
+  // "this month" going forward without needing manual updates each month.
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const MONTH_LABELS: Record<string, string> = {
+    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril', '05': 'Mayo', '06': 'Junio',
+    '07': 'Julio', '08': 'Agosto', '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+  };
+  const formatMonthLabel = (monthKey: string) => {
+    const [year, monthNum] = monthKey.split('-');
+    const label = `${MONTH_LABELS[monthNum] || monthNum} ${year}`;
+    return monthKey === currentMonthKey ? `${label} (Actual)` : label;
+  };
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
   const theme = getThemeClasses(themeConfig.primaryColor);
 
   // --- KPI Chart 1: Monthly compliance trend (team average completion rate per month) ---
+  // Always includes the current month plus every month present in the
+  // collaborators' recorded history, so it keeps updating automatically
+  // period after period instead of needing hardcoded month options.
   const monthsSeen = Array.from(
-    new Set(collaborators.flatMap(c => c.monthlyPerformance.map(m => m.month)))
+    new Set([...collaborators.flatMap(c => c.monthlyPerformance.map(m => m.month)), currentMonthKey])
   ).sort();
+  const availableMonths = [...monthsSeen].sort().reverse();
   const complianceTrendData = monthsSeen.map(month => {
     const entries = collaborators
       .map(c => c.monthlyPerformance.find(m => m.month === month))
@@ -144,9 +162,9 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
           onChange={(e) => setSelectedMonth(e.target.value)}
           className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 font-bold text-slate-900 dark:text-white focus:outline-none"
         >
-          <option value="2026-07">Julio 2026 (Actual)</option>
-          <option value="2026-06">Junio 2026</option>
-          <option value="2026-05">Mayo 2026</option>
+          {availableMonths.map(monthKey => (
+            <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey)}</option>
+          ))}
         </select>
       </div>
 

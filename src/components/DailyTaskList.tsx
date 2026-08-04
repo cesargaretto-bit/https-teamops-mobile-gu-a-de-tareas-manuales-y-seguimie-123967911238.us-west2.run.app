@@ -57,7 +57,9 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
-  const [taskDisplayMode, setTaskDisplayMode] = useState<'list' | 'agenda'>('list');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [taskDisplayMode, setTaskDisplayMode] = useState<'cards' | 'list' | 'agenda'>('cards');
   const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
   const [activeTimerTaskId, setActiveTimerTaskId] = useState<string | null>(null);
   const [uploadingProofForTaskId, setUploadingProofForTaskId] = useState<string | null>(null);
@@ -105,7 +107,10 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
         task.countryId === selectedCountryObj.id
       ));
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry;
+    const matchesDateFrom = !dateFrom || (task.dueDate && task.dueDate >= dateFrom);
+    const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo;
   });
 
   // Handle Step Checkbox Toggle
@@ -114,12 +119,21 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       s.id === stepId ? { ...s, completed: !s.completed } : s
     );
 
+    // Autonomous status: as soon as at least one step is checked the task
+    // moves to "En Proceso", and once every step is checked it moves to
+    // "Completada" — automatically, without needing a manual status change.
+    // This also reverts cleanly if a step gets unchecked afterwards, except
+    // for tasks a supervisor explicitly marked as "Bloqueada".
     const completedCount = updatedSteps.filter(s => s.completed).length;
     let newStatus = task.status;
-    if (completedCount === updatedSteps.length && updatedSteps.length > 0) {
-      newStatus = 'completed';
-    } else if (completedCount > 0 && task.status === 'pending') {
-      newStatus = 'in_progress';
+    if (task.status !== 'blocked') {
+      if (updatedSteps.length > 0 && completedCount === updatedSteps.length) {
+        newStatus = 'completed';
+      } else if (completedCount > 0) {
+        newStatus = 'in_progress';
+      } else {
+        newStatus = 'pending';
+      }
     }
 
     const updatedTask: Task = {
@@ -218,38 +232,28 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* View Mode Switcher Bar */}
+      {/* View Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl text-xs font-bold">
-          <button
-            onClick={() => setTaskDisplayMode('list')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all ${
-              taskDisplayMode === 'list'
-                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm font-extrabold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-emerald-500" />
+            Modo de Visualización:
+          </label>
+          <select
+            value={taskDisplayMode}
+            onChange={(e) => setTaskDisplayMode(e.target.value as 'cards' | 'list' | 'agenda')}
+            className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <FileText className="w-4 h-4" />
-            <span>Vista Tarjetas / Lista</span>
-          </button>
-
-          <button
-            onClick={() => setTaskDisplayMode('agenda')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all ${
-              taskDisplayMode === 'agenda'
-                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm font-extrabold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Vista Agenda & Calendario</span>
-          </button>
+            <option value="cards">🗂️ Tarjetas</option>
+            <option value="list">📋 Lista</option>
+            <option value="agenda">📅 Agenda</option>
+          </select>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
           <span className="hidden sm:inline">Modo Activo:</span>
           <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold font-mono">
-            {taskDisplayMode === 'list' ? '📋 Cuadrícula de Tarjetas' : '📅 Agenda Interactiva'}
+            {taskDisplayMode === 'cards' ? '🗂️ Tarjetas' : taskDisplayMode === 'list' ? '📋 Lista' : '📅 Agenda Interactiva'}
           </span>
         </div>
       </div>
@@ -343,19 +347,157 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
               {c.label}
             </button>
           ))}
+
+          <span className="text-slate-500 dark:text-slate-400 font-medium ml-2 flex items-center gap-1">
+            <Calendar className="w-3 h-3 text-emerald-500" /> Fecha:
+          </span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Desde"
+          />
+          <span className="text-slate-400">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Hasta"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+              title="Limpiar filtro de fechas"
+            >
+              ✕ Limpiar
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Task List Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredTasks.length === 0 ? (
-          <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-            <CheckCircle2 className="w-12 h-12 mx-auto text-slate-400 mb-2" />
-            <p className="text-slate-600 dark:text-slate-300 font-medium">No se encontraron tareas con los filtros aplicados.</p>
-            <p className="text-xs text-slate-400 mt-1">Prueba cambiando el término de búsqueda o creando una nueva tarea.</p>
-          </div>
-        ) : (
-          filteredTasks.map(task => {
+      {filteredTasks.length === 0 ? (
+        <div className="py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+          <CheckCircle2 className="w-12 h-12 mx-auto text-slate-400 mb-2" />
+          <p className="text-slate-600 dark:text-slate-300 font-medium">No se encontraron tareas con los filtros aplicados.</p>
+          <p className="text-xs text-slate-400 mt-1">Prueba cambiando el término de búsqueda o creando una nueva tarea.</p>
+        </div>
+      ) : taskDisplayMode === 'list' ? (
+        /* Compact List / Table View */
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left font-bold">Código</th>
+                <th className="px-3 py-2 text-left font-bold">Título</th>
+                <th className="px-3 py-2 text-left font-bold">Estado</th>
+                <th className="px-3 py-2 text-left font-bold">Prioridad</th>
+                <th className="px-3 py-2 text-left font-bold">Asignado</th>
+                <th className="px-3 py-2 text-left font-bold">País</th>
+                <th className="px-3 py-2 text-left font-bold">Fecha</th>
+                <th className="px-3 py-2 text-left font-bold">Avance</th>
+                <th className="px-3 py-2 text-right font-bold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+              {filteredTasks.map(task => {
+                const completedSteps = task.steps.filter(s => s.completed).length;
+                const progressPercent = task.steps.length
+                  ? Math.round((completedSteps / task.steps.length) * 100)
+                  : task.status === 'completed' ? 100 : 0;
+
+                return (
+                  <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                    <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300 font-semibold whitespace-nowrap">
+                      {task.code}
+                    </td>
+                    <td className="px-3 py-2 max-w-[220px]">
+                      <span className="font-semibold text-slate-900 dark:text-white truncate block">{task.title}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={task.status}
+                        onChange={(e) => handleStatusChange(task, e.target.value as TaskStatus)}
+                        className={`text-[11px] font-bold px-2 py-1 rounded-md border text-slate-800 dark:text-white focus:outline-none ${
+                          task.status === 'completed'
+                            ? 'bg-emerald-100 dark:bg-emerald-950 border-emerald-300 text-emerald-800 dark:text-emerald-300'
+                            : task.status === 'in_progress'
+                            ? 'bg-amber-100 dark:bg-amber-950 border-amber-300 text-amber-800 dark:text-amber-300'
+                            : task.status === 'blocked'
+                            ? 'bg-red-100 dark:bg-red-950 border-red-300 text-red-800 dark:text-red-300'
+                            : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        <option value="pending">Pendiente</option>
+                        <option value="in_progress">En Proceso</option>
+                        <option value="completed">Completada</option>
+                        <option value="blocked">Bloqueada</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${
+                        task.priority === 'Alta'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300'
+                          : task.priority === 'Media'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
+                      }`} translate="no">
+                        {task.priority}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      👤 {task.assignedUserName}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      {task.countryFlag || '🌐'} {task.countryName || '-'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      {task.dueDate || 'Sin fecha'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2" translate="no">
+                        <div className="w-16 bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full ${
+                              progressPercent === 100 ? 'bg-emerald-500' : task.status === 'blocked' ? 'bg-red-500' : theme.bg
+                            }`}
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium">{progressPercent}%</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setActiveTaskDetail(task)}
+                          className="px-2.5 py-1 rounded-md font-semibold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white transition-all text-[11px]"
+                        >
+                          Detalle
+                        </button>
+                        {canDelete && onDeleteTask && (
+                          <button
+                            onClick={() => setTaskToDelete(task)}
+                            title="Eliminar tarea (Permiso de Supervisor / Admin)"
+                            className="p-1.5 rounded-md bg-red-100 dark:bg-red-950/80 hover:bg-red-200 dark:hover:bg-red-900 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* Task List Grid (Cards) */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredTasks.map(task => {
             const completedSteps = task.steps.filter(s => s.completed).length;
             const progressPercent = task.steps.length 
               ? Math.round((completedSteps / task.steps.length) * 100) 
@@ -379,7 +521,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                           : task.priority === 'Media'
                           ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
                           : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
-                      }`}>
+                      }`} translate="no">
                         {task.priority}
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 pl-2">
@@ -434,7 +576,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
 
                   {/* Step Progress Bar */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
+                    <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-300" translate="no">
                       <span>Avance: {completedSteps}/{task.steps.length} pasos</span>
                       <span>{progressPercent}%</span>
                     </div>
@@ -501,11 +643,12 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                 <div className="bg-slate-50 dark:bg-slate-900/80 px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-mono">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{task.actualMinutes}m / {task.estimatedMinutes}m</span>
+                    <span translate="no">{task.actualMinutes}m / {task.estimatedMinutes}m</span>
                     <button
                       onClick={() => handleIncrementTime(task, 5)}
-                      className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 font-sans text-[11px] font-bold"
+                      className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 font-sans text-[11px] font-bold notranslate"
                       title="Sumar 5 minutos trabajados"
+                      translate="no"
                     >
                       +5m
                     </button>
@@ -552,9 +695,9 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
       </>
       )}
 
