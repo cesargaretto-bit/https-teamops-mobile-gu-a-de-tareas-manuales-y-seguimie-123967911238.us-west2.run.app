@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, X, ListPlus, Shield, Wrench, Clock, MapPin, Globe, Calendar, Repeat } from 'lucide-react';
 import { Task, Category, Priority, Procedure, Collaborator, ThemeConfig, Country, LocationDefinition, TaskPeriodicity } from '../types';
 import { getThemeClasses } from '../utils/helpers';
@@ -28,11 +28,11 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Category>('Mantenimiento');
   const [priority, setPriority] = useState<Priority>('Media');
-  const [assignedUserId, setAssignedUserId] = useState(collaborators[0]?.id || 'usr-1');
+  const [assignedUserId, setAssignedUserId] = useState(collaborators[0]?.id || '');
   const [procedureRefCode, setProcedureRefCode] = useState('');
   const [estimatedMinutes, setEstimatedMinutes] = useState(30);
   const [locationName, setLocationName] = useState('Planta Principal - Nivel 1');
-  const [countryId, setCountryId] = useState<string>(countries[0]?.id || 'cnt-ar');
+  const [countryId, setCountryId] = useState<string>(countries[0]?.id || '');
   const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [periodicity, setPeriodicity] = useState<TaskPeriodicity>('unica');
   const [periodEndDate, setPeriodEndDate] = useState<string>(() => {
@@ -41,6 +41,29 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [stepsInput, setStepsInput] = useState<string>('Paso 1: Inspección de seguridad\nPaso 2: Ejecución según procedimiento\nPaso 3: Verificación de calidad');
+
+  // Bug fix: the collaborator/country lists load asynchronously from Supabase,
+  // so they can still be empty at the instant this modal first mounts (this
+  // component stays mounted even while hidden). That left assignedUserId /
+  // countryId stuck on a fallback that pointed at nobody real, so a task
+  // could get silently assigned to a made-up person once the real list
+  // arrived. Keep both selections in sync with whatever data is actually
+  // loaded, resetting only when the current selection is no longer valid.
+  useEffect(() => {
+    if (collaborators.length === 0) return;
+    if (!assignedUserId || !collaborators.some(c => c.id === assignedUserId)) {
+      setAssignedUserId(collaborators[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collaborators]);
+
+  useEffect(() => {
+    if (countries.length === 0) return;
+    if (!countryId || !countries.some(c => c.id === countryId)) {
+      setCountryId(countries[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countries]);
 
   // Max horizon: 1 year from current date
   const max1YearDate = React.useMemo(() => {
@@ -86,6 +109,12 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     if (!title.trim()) return;
 
     const assignedCollab = collaborators.find(c => c.id === assignedUserId);
+    if (!assignedCollab) {
+      // Don't silently invent an assignee (this used to fall back to a fake
+      // hardcoded "Carlos Mendoza") — block the submit and let the person
+      // pick a real collaborator instead.
+      return;
+    }
     const selectedSop = procedures.find(p => p.code === procedureRefCode);
     const selectedCountry = countries.find(c => c.id === countryId);
 
@@ -104,14 +133,14 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       category,
       priority,
       assignedUserId,
-      assignedUserName: assignedCollab?.name || 'Carlos Mendoza',
+      assignedUserName: assignedCollab.name,
       procedureRefCode: selectedSop?.code || undefined,
       procedureRefTitle: selectedSop?.title || undefined,
       estimatedMinutes: Number(estimatedMinutes) || 30,
       locationName,
-      countryId: selectedCountry?.id || 'cnt-ar',
-      countryName: selectedCountry?.name || 'Argentina',
-      countryFlag: selectedCountry?.flagEmoji || '🇦🇷',
+      countryId: selectedCountry?.id,
+      countryName: selectedCountry?.name,
+      countryFlag: selectedCountry?.flagEmoji,
       dueDate: dueDate || new Date().toISOString().split('T')[0],
       periodicity: periodicity,
       periodEndDate: periodicity !== 'unica' ? periodEndDate : undefined,
@@ -211,8 +240,10 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               <select
                 value={assignedUserId}
                 onChange={(e) => setAssignedUserId(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                disabled={collaborators.length === 0}
+                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none disabled:opacity-50"
               >
+                {collaborators.length === 0 && <option value="">Cargando colaboradores…</option>}
                 {collaborators.map(c => (
                   <option key={c.id} value={c.id}>{c.name} ({c.department})</option>
                 ))}

@@ -57,6 +57,19 @@ import { SettingsAndSecurityModal } from './components/SettingsAndSecurityModal'
 import { CreateTaskModal } from './components/CreateTaskModal';
 import { UserProfileLoginModal, UserSession } from './components/UserProfileLoginModal';
 
+// Navigation tabs catalog — module-level so both the default order and the
+// nav bar's render logic share the same source of truth.
+const NAV_TABS: { id: string; label: string; icon: any }[] = [
+  { id: 'tasks', label: 'Guía de Tareas', icon: CheckSquare },
+  { id: 'sops', label: 'Manuales SOP', icon: BookOpen },
+  { id: 'abm', label: 'Módulo ABM & Maestros', icon: Database },
+  { id: 'collaborators', label: 'Equipo de Campo', icon: Users },
+  { id: 'admin', label: 'Panel Admin', icon: LayoutDashboard },
+  { id: 'reports', label: 'Reportes & Export', icon: FileText },
+  { id: 'api', label: 'API REST', icon: Code }
+];
+const NAV_TAB_IDS = NAV_TABS.map(t => t.id);
+
 // Generic helpers reused for every ABM master catalog (countries, roles,
 // departments, statuses, locations) so they follow the exact same
 // load-once-then-realtime-sync pattern already used for tasks/collaborators.
@@ -163,6 +176,41 @@ export default function App() {
   // User Role & Navigation
   const [currentRole, setCurrentRole] = useState<'collaborator' | 'admin'>('collaborator');
   const [activeTab, setActiveTab] = useState<'tasks' | 'sops' | 'admin' | 'abm' | 'collaborators' | 'reports' | 'api'>('tasks');
+
+  // Draggable, reorderable nav tabs — the chosen order is remembered per
+  // device (localStorage) so each user can arrange the menu the way they work.
+  const [tabOrder, setTabOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('teamops_nav_tab_order');
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        const valid = parsed.filter(id => NAV_TAB_IDS.includes(id));
+        const missing = NAV_TAB_IDS.filter(id => !valid.includes(id));
+        if (valid.length > 0) return [...valid, ...missing];
+      }
+    } catch {
+      // ignore malformed saved order and fall back to default
+    }
+    return NAV_TAB_IDS;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('teamops_nav_tab_order', JSON.stringify(tabOrder));
+    } catch {
+      // storage unavailable — reordering just won't persist across reloads
+    }
+  }, [tabOrder]);
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const handleTabDrop = (targetId: string) => {
+    if (!draggedTabId || draggedTabId === targetId) return;
+    setTabOrder(prev => {
+      const next = prev.filter(id => id !== draggedTabId);
+      const targetIndex = next.indexOf(targetId);
+      next.splice(targetIndex, 0, draggedTabId);
+      return next;
+    });
+    setDraggedTabId(null);
+  };
 
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
@@ -421,8 +469,12 @@ export default function App() {
         category: partialTask.category || 'Mantenimiento',
         priority: partialTask.priority || 'Media',
         status: 'pending',
-        assignedUserId: partialTask.assignedUserId || 'usr-1',
-        assignedUserName: partialTask.assignedUserName || 'Carlos Mendoza',
+        // No fabricated fallback here on purpose: CreateTaskModal always
+        // sends a real assignedUserId/assignedUserName from the current ABM
+        // collaborators list now, so a missing value should surface as
+        // "Sin Asignar" rather than silently pointing at a made-up person.
+        assignedUserId: partialTask.assignedUserId || '',
+        assignedUserName: partialTask.assignedUserName || 'Sin Asignar',
         procedureRefCode: partialTask.procedureRefCode,
         procedureRefTitle: partialTask.procedureRefTitle,
         estimatedMinutes: partialTask.estimatedMinutes || 30,
@@ -711,23 +763,25 @@ export default function App() {
             {/* Navigation Tabs Bar */}
             <div className="bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 px-4 pt-2 overflow-x-auto scrollbar-none">
               <nav className="flex space-x-1 sm:space-x-2 text-xs font-bold">
-                {[
-                  { id: 'tasks', label: 'Guía de Tareas', icon: CheckSquare },
-                  { id: 'sops', label: 'Manuales SOP', icon: BookOpen },
-                  { id: 'abm', label: 'Módulo ABM & Maestros', icon: Database },
-                  { id: 'collaborators', label: 'Equipo de Campo', icon: Users },
-                  { id: 'admin', label: 'Panel Admin', icon: LayoutDashboard },
-                  { id: 'reports', label: 'Reportes & Export', icon: FileText },
-                  { id: 'api', label: 'API REST', icon: Code }
-                ].map(tab => {
+                {tabOrder.map(tabId => {
+                  const tab = NAV_TABS.find(t => t.id === tabId);
+                  if (!tab) return null;
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
 
                   return (
                     <button
                       key={tab.id}
+                      draggable
+                      onDragStart={() => setDraggedTabId(tab.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleTabDrop(tab.id)}
+                      onDragEnd={() => setDraggedTabId(null)}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-1.5 px-3 py-2.5 rounded-t-xl border-b-2 transition-all shrink-0 ${
+                      title="Arrastrá para reordenar el menú"
+                      className={`flex items-center gap-1.5 px-3 py-2.5 rounded-t-xl border-b-2 transition-all shrink-0 cursor-grab active:cursor-grabbing ${
+                        draggedTabId === tab.id ? 'opacity-40' : ''
+                      } ${
                         isActive
                           ? `${theme.border} text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 font-extrabold shadow-sm`
                           : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50'
@@ -860,7 +914,7 @@ export default function App() {
             {/* App Footer */}
             <footer className="p-3 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 text-center text-[11px] text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2 px-6">
               <div className="flex items-center gap-2">
-                <span>TeamOps Mobile Platform © 2026</span>
+                <span>Daily Ops Mobile Platform © 2026</span>
                 <span>•</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Cifrado E2EE AES-GCM-256</span>
               </div>

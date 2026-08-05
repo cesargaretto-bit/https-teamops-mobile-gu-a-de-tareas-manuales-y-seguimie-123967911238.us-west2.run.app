@@ -1,18 +1,20 @@
-import React from 'react';
-import { 
-  ShieldCheck, 
-  Wifi, 
-  WifiOff, 
-  RefreshCw, 
-  Smartphone, 
-  Monitor, 
-  Palette, 
-  Lock, 
-  UserCheck, 
-  Bell, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  ShieldCheck,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Smartphone,
+  Monitor,
+  Palette,
+  Lock,
+  UserCheck,
+  Bell,
   Sliders,
   User,
-  LogIn
+  LogIn,
+  Upload,
+  X
 } from 'lucide-react';
 import { ThemeConfig, SecurityConfig, PushNotificationConfig } from '../types';
 import { getThemeClasses } from '../utils/helpers';
@@ -53,6 +55,46 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 }) => {
   const theme = getThemeClasses(themeConfig.primaryColor);
 
+  // Company logo: uploaded once and remembered on this device/browser, shown
+  // on the right side of the header so each customer can brand the app.
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('teamops_company_logo');
+      if (saved) setCompanyLogo(saved);
+    } catch {
+      // storage unavailable — logo just won't persist across reloads
+    }
+  }, []);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setCompanyLogo(dataUrl);
+      try {
+        localStorage.setItem('teamops_company_logo', dataUrl);
+      } catch {
+        // storage unavailable — logo just won't persist across reloads
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveLogo = () => {
+    setCompanyLogo(null);
+    try {
+      localStorage.removeItem('teamops_company_logo');
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
@@ -64,7 +106,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg tracking-tight leading-none">
-                TeamOps <span className={`${theme.text} text-xs sm:text-sm font-semibold`}>Mobile</span>
+                Daily Ops <span className={`${theme.text} text-xs sm:text-sm font-semibold`}>Mobile</span>
               </h1>
               <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                 <ShieldCheck className="w-3 h-3 mr-1" />
@@ -191,6 +233,42 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
               Admin
             </button>
           </div>
+
+          {/* Company Logo (uploaded once, remembered on this device) */}
+          <input
+            ref={logoFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoUpload}
+            className="hidden"
+          />
+          {companyLogo ? (
+            <div className="relative group">
+              <button
+                onClick={() => logoFileInputRef.current?.click()}
+                title="Cambiar logo de la compañía"
+                className="flex items-center justify-center h-9 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+              >
+                <img src={companyLogo} alt="Logo de la compañía" className="h-6 max-w-[96px] object-contain" />
+              </button>
+              <button
+                onClick={handleRemoveLogo}
+                title="Quitar logo"
+                className="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white items-center justify-center shadow"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => logoFileInputRef.current?.click()}
+              title="Cargar logo de la compañía"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-all text-xs font-medium"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Logo</span>
+            </button>
+          )}
 
           {/* Settings & Personalization */}
           <button

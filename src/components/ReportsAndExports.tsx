@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileSpreadsheet,
   FileText,
@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Timer,
   Gauge,
-  Users
+  Users,
+  GripVertical
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -231,6 +232,187 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
     };
   };
 
+  // --- Drag-and-drop chart reordering, remembered per browser (localStorage) ---
+  const CHART_ORDER_KEY = 'teamops_reports_chart_order';
+  const DEFAULT_CHART_ORDER = ['teamCompliance', 'category', 'priority', 'efficiency', 'workload', 'trend'];
+  const [chartOrder, setChartOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(CHART_ORDER_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        const valid = parsed.filter(id => DEFAULT_CHART_ORDER.includes(id));
+        const missing = DEFAULT_CHART_ORDER.filter(id => !valid.includes(id));
+        if (valid.length > 0) return [...valid, ...missing];
+      }
+    } catch {
+      // ignore malformed saved order and fall back to default
+    }
+    return DEFAULT_CHART_ORDER;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHART_ORDER_KEY, JSON.stringify(chartOrder));
+    } catch {
+      // storage unavailable — reordering just won't persist across reloads
+    }
+  }, [chartOrder]);
+  const [draggedChartId, setDraggedChartId] = useState<string | null>(null);
+  const handleChartDrop = (targetId: string) => {
+    if (!draggedChartId || draggedChartId === targetId) return;
+    setChartOrder(prev => {
+      const next = prev.filter(id => id !== draggedChartId);
+      const targetIndex = next.indexOf(targetId);
+      next.splice(targetIndex, 0, draggedChartId);
+      return next;
+    });
+    setDraggedChartId(null);
+  };
+
+  const chartDefinitions: Record<string, { title: string; icon: React.ReactNode; node: React.ReactNode }> = {
+    teamCompliance: {
+      title: 'Cumplimiento de Tareas del Equipo',
+      icon: <BarChart3 className="w-4 h-4 text-emerald-500" />,
+      node: (
+        <>
+          {teamComplianceData.length > 0 && teamComplianceData.some(d => d.total > 0) ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={teamComplianceData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                  <Tooltip />
+                  <Bar dataKey="Cumplimiento (%)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+          )}
+          <p className="text-[10px] text-slate-400">
+            Cumplimiento = tareas completadas ÷ tareas totales del período. Usá los filtros de arriba para elegir período(s), granularidad (día/semana/mes/acumulado) y colaboradores.
+          </p>
+        </>
+      )
+    },
+    category: {
+      title: 'Cumplimiento por Categoría',
+      icon: <BarChart3 className="w-4 h-4 text-emerald-500" />,
+      node: (
+        categoryComplianceData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ReBarChart data={categoryComplianceData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="key" stroke="#94a3b8" fontSize={10} interval={0} angle={-15} textAnchor="end" height={50} />
+                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="Cumplimiento (%)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </ReBarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+        )
+      )
+    },
+    priority: {
+      title: 'Cumplimiento por Prioridad',
+      icon: <BarChart3 className="w-4 h-4 text-emerald-500" />,
+      node: (
+        priorityComplianceData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ReBarChart data={priorityComplianceData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="Cumplimiento (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </ReBarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+        )
+      )
+    },
+    efficiency: {
+      title: 'Eficiencia de Tiempo (Real vs. Estimado)',
+      icon: <Gauge className="w-4 h-4 text-emerald-500" />,
+      node: (
+        <>
+          {efficiencyData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={efficiencyData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="Tiempo Estimado (min)" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Tiempo Real (min)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">
+              Todavía no hay tareas con hora de inicio y fin registradas. Se completa automáticamente cuando un colaborador carga su horario en el detalle de la tarea.
+            </p>
+          )}
+          <p className="text-[10px] text-slate-400">
+            Eficiencia = tiempo estimado ÷ tiempo real. Por encima de 100% significa que se resolvió más rápido que lo planificado.
+          </p>
+        </>
+      )
+    },
+    workload: {
+      title: 'Carga Horaria por Colaborador (horas trabajadas)',
+      icon: <Timer className="w-4 h-4 text-emerald-500" />,
+      node: (
+        workloadData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ReBarChart data={workloadData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} />
+                <Tooltip />
+                <Bar dataKey="Horas Trabajadas" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </ReBarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">Sin datos de horario registrados todavía.</p>
+        )
+      )
+    },
+    trend: {
+      title: 'Tendencia de Cumplimiento y Apego a SOP (Promedio del Equipo)',
+      icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
+      node: (
+        complianceTrendData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={complianceTrendData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Line type="monotone" dataKey="Cumplimiento (%)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="Apego a SOP (%)" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">Aún no hay historial mensual suficiente para graficar la tendencia.</p>
+        )
+      )
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Banner & Quick Action Buttons */}
@@ -394,132 +576,40 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
         </div>
       </div>
 
-      {/* KPI Charts: Compliance & Efficiency Indicators */}
+      {/* KPI Charts: Compliance & Efficiency Indicators — drag any card by its
+          grip handle to reorder them; the order is remembered on this device. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart: Team Compliance (Cumplimiento de Tareas del Equipo) */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-emerald-500" />
-            Cumplimiento de Tareas del Equipo
-          </h3>
-          {teamComplianceData.length > 0 && teamComplianceData.some(d => d.total > 0) ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={teamComplianceData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
-                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
-                  <Tooltip />
-                  <Bar dataKey="Cumplimiento (%)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
+        {chartOrder.map(chartId => {
+          const chart = chartDefinitions[chartId];
+          if (!chart) return null;
+          return (
+            <div
+              key={chartId}
+              draggable
+              onDragStart={() => setDraggedChartId(chartId)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleChartDrop(chartId)}
+              onDragEnd={() => setDraggedChartId(null)}
+              className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3 transition-opacity ${
+                draggedChartId === chartId ? 'opacity-40' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  {chart.icon}
+                  {chart.title}
+                </h3>
+                <span
+                  title="Arrastrá para reordenar"
+                  className="p-1 -mr-1 rounded text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0"
+                >
+                  <GripVertical className="w-4 h-4" />
+                </span>
+              </div>
+              {chart.node}
             </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
-          )}
-          <p className="text-[10px] text-slate-400">
-            Cumplimiento = tareas completadas ÷ tareas totales del período. Usá los filtros de arriba para elegir período(s), granularidad (día/semana/mes/acumulado) y colaboradores.
-          </p>
-        </div>
-
-        {/* Chart: Compliance by Category */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-emerald-500" />
-            Cumplimiento por Categoría
-          </h3>
-          {categoryComplianceData.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={categoryComplianceData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={10} interval={0} angle={-15} textAnchor="end" height={50} />
-                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
-                  <Tooltip />
-                  <Bar dataKey="Cumplimiento (%)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
-          )}
-        </div>
-
-        {/* Chart: Compliance by Priority */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-emerald-500" />
-            Cumplimiento por Prioridad
-          </h3>
-          {priorityComplianceData.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={priorityComplianceData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
-                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
-                  <Tooltip />
-                  <Bar dataKey="Cumplimiento (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
-          )}
-        </div>
-
-        {/* Chart: Time Efficiency per Collaborator */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-emerald-500" />
-            Eficiencia de Tiempo (Real vs. Estimado)
-          </h3>
-          {efficiencyData.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={efficiencyData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-                  <YAxis stroke="#94a3b8" fontSize={11} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar dataKey="Tiempo Estimado (min)" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Tiempo Real (min)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">
-              Todavía no hay tareas con hora de inicio y fin registradas. Se completa automáticamente cuando un colaborador carga su horario en el detalle de la tarea.
-            </p>
-          )}
-          <p className="text-[10px] text-slate-400">
-            Eficiencia = tiempo estimado ÷ tiempo real. Por encima de 100% significa que se resolvió más rápido que lo planificado.
-          </p>
-        </div>
-
-        {/* Chart: Workload (carga horaria) per Collaborator */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <Timer className="w-4 h-4 text-emerald-500" />
-            Carga Horaria por Colaborador (horas trabajadas)
-          </h3>
-          {workloadData.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={workloadData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-                  <YAxis stroke="#94a3b8" fontSize={11} />
-                  <Tooltip />
-                  <Bar dataKey="Horas Trabajadas" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">Sin datos de horario registrados todavía.</p>
-          )}
-        </div>
+          );
+        })}
       </div>
 
       {/* Collaborator Performance Detailed Cards Table */}
@@ -606,31 +696,6 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Chart: Monthly Compliance Trend — placed at the end of the view, as requested */}
-      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-        <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-500" />
-          Tendencia de Cumplimiento y Apego a SOP (Promedio del Equipo)
-        </h3>
-        {complianceTrendData.length > 0 ? (
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={complianceTrendData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Line type="monotone" dataKey="Cumplimiento (%)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="Apego a SOP (%)" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400 py-6 text-center">Aún no hay historial mensual suficiente para graficar la tendencia.</p>
-        )}
       </div>
     </div>
   );

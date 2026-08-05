@@ -73,7 +73,7 @@ export function exportTasksToCSV(tasks: Task[]) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `TeamOps_Reporte_Tareas_${new Date().toISOString().slice(0,10)}.csv`);
+  link.setAttribute('download', `DailyOpsMobile_Reporte_Tareas_${new Date().toISOString().slice(0,10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -102,7 +102,7 @@ export function exportCollaboratorsToCSV(collaborators: Collaborator[]) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `TeamOps_Rendimiento_Equipo_${new Date().toISOString().slice(0,10)}.csv`);
+  link.setAttribute('download', `DailyOpsMobile_Rendimiento_Equipo_${new Date().toISOString().slice(0,10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -144,7 +144,7 @@ export function generatePDFReport(title: string, collaborators: Collaborator[], 
     <body>
       <div class="header">
         <div>
-          <div class="logo">TeamOps Mobile</div>
+          <div class="logo">Daily Ops Mobile</div>
           <div style="font-size: 14px; color: #64748b; margin-top: 4px;">${title}</div>
         </div>
         <div>
@@ -224,7 +224,7 @@ export function generatePDFReport(title: string, collaborators: Collaborator[], 
       </table>
 
       <div class="footer">
-        Este documento fue generado automáticamente por la plataforma TeamOps Mobile con Cifrado de Extremo a Extremo (AES-GCM-256).
+        Este documento fue generado automáticamente por la plataforma Daily Ops Mobile con Cifrado de Extremo a Extremo (AES-GCM-256).
       </div>
       <script>
         window.onload = function() { window.print(); }
