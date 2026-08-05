@@ -783,7 +783,7 @@ export default function App() {
                         draggedTabId === tab.id ? 'opacity-40' : ''
                       } ${
                         isActive
-                          ? `${theme.border} text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 font-extrabold shadow-sm`
+                          ? `${theme.border} ${theme.text} ${theme.darkText} bg-white dark:bg-slate-800 font-extrabold shadow-sm`
                           : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50'
                       }`}
                     >

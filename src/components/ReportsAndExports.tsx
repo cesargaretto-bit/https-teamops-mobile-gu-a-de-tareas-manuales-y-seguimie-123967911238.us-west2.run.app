@@ -72,11 +72,15 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 
   const theme = getThemeClasses(themeConfig.primaryColor);
 
+  // "Seguimiento" tasks are tracking-only and must never count towards
+  // productivity/compliance metrics — excluded from every chart/table below.
+  const productivityTasks = tasks.filter(t => t.category !== 'Seguimiento');
+
   // --- Period selector: now supports multi-selection of months ---
   const monthsSeen = Array.from(
     new Set([
       ...collaborators.flatMap(c => c.monthlyPerformance.map(m => m.month)),
-      ...tasks.map(t => (t.dueDate || '').slice(0, 7)).filter(Boolean),
+      ...productivityTasks.map(t => (t.dueDate || '').slice(0, 7)).filter(Boolean),
       currentMonthKey
     ])
   ).sort();
@@ -103,8 +107,8 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
     ? collaborators.filter(c => selectedUserIds.includes(c.id))
     : collaborators;
   const filteredTasksByUser = selectedUserIds.length > 0
-    ? tasks.filter(t => selectedUserIds.includes(t.assignedUserId))
-    : tasks;
+    ? productivityTasks.filter(t => selectedUserIds.includes(t.assignedUserId))
+    : productivityTasks;
 
   // --- KPI Chart: Team Compliance (tasks completed vs. total), computed directly
   // from tasks so it can be broken down by day, week, current month or
@@ -208,7 +212,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   // Only counts tasks with actual work time logged (actualMinutes > 0), which is
   // populated automatically once a collaborator sets a start/end time on a task.
   const efficiencyData = filteredCollaborators.map(c => {
-    const theirTasks = tasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
+    const theirTasks = productivityTasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
     const realMin = theirTasks.reduce((sum, t) => sum + t.actualMinutes, 0);
     const estMin = theirTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0);
     const efficiency = realMin > 0 ? Math.round((estMin / realMin) * 100) : 0;
@@ -223,7 +227,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 
   // --- Workload (carga horaria) — total minutes worked per collaborator across all logged tasks ---
   const workloadData = filteredCollaborators.map(c => {
-    const totalMin = tasks
+    const totalMin = productivityTasks
       .filter(t => t.assignedUserId === c.id && t.actualMinutes > 0)
       .reduce((sum, t) => sum + t.actualMinutes, 0);
     return { name: c.name.split(' ')[0], 'Horas Trabajadas': Math.round((totalMin / 60) * 10) / 10 };

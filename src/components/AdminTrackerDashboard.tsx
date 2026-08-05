@@ -54,7 +54,11 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
   const [dateFrom, setDateFrom] = useState<string>(todayStr);
   const [dateTo, setDateTo] = useState<string>(todayStr);
 
-  const tasksInRange = tasks.filter(t => {
+  // "Seguimiento" tasks are tracking-only and must never count towards
+  // productivity/compliance metrics (KPIs, charts) shown in this panel.
+  const productivityTasks = tasks.filter(t => t.category !== 'Seguimiento');
+
+  const tasksInRange = productivityTasks.filter(t => {
     if (!t.dueDate) return true;
     if (dateFrom && t.dueDate < dateFrom) return false;
     if (dateTo && t.dueDate > dateTo) return false;

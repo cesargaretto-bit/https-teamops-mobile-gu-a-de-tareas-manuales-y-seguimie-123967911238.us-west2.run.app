@@ -423,7 +423,7 @@ export const INITIAL_SECURITY_CONFIG: SecurityConfig = {
 };
 
 export const INITIAL_THEME_CONFIG: ThemeConfig = {
-  primaryColor: 'emerald',
+  primaryColor: 'cobalt',
   mode: 'dark',
   compactView: false,
   simulatedMobileFrame: true

@@ -213,6 +213,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 <option value="Operaciones">Operaciones</option>
                 <option value="Calidad">Calidad</option>
                 <option value="Inventario">Inventario</option>
+                <option value="Logística">Logística</option>
+                <option value="Seguimiento">Seguimiento (no cuenta en productividad)</option>
               </select>
             </div>
 
