@@ -16,12 +16,13 @@ import {
   Database,
   Globe
 } from 'lucide-react';
-import { 
-  Task, 
-  Procedure, 
-  Collaborator, 
-  ThemeConfig, 
-  SecurityConfig, 
+import {
+  Task,
+  TaskStatus,
+  Procedure,
+  Collaborator,
+  ThemeConfig,
+  SecurityConfig,
   PushNotificationConfig,
   Country,
   RoleDefinition,
@@ -337,6 +338,34 @@ export default function App() {
   };
 
   // Update Task handler
+  // Auto-mark overdue, unfinished tasks as "Incompleta": once the data is
+  // loaded, any task whose due date is in the past and that never reached
+  // "Completada" or "Bloqueada" is flagged so it doesn't silently stay
+  // "Pendiente"/"En Proceso" forever and skews compliance reports.
+  useEffect(() => {
+    if (!isCloudDataLoaded) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const overdueUnfinished = tasks.filter(t =>
+      t.dueDate && t.dueDate < todayStr && (t.status === 'pending' || t.status === 'in_progress')
+    );
+    if (overdueUnfinished.length === 0) return;
+
+    setTasks(prev => prev.map(t =>
+      overdueUnfinished.some(o => o.id === t.id) ? { ...t, status: 'incomplete' as TaskStatus } : t
+    ));
+
+    if (isSupabaseConfigured && isOnline) {
+      overdueUnfinished.forEach(t => {
+        supabase.from('tasks').upsert({
+          id: t.id,
+          payload: { ...t, status: 'incomplete', synced: true },
+          updated_at: new Date().toISOString()
+        });
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCloudDataLoaded]);
+
   const handleUpdateTask = async (updatedTask: Task) => {
     const taskWithSyncFlag = { ...updatedTask, synced: isOnline };
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? taskWithSyncFlag : t));
@@ -370,8 +399,19 @@ export default function App() {
     const seriesId = periodicity !== 'unica' ? `rec-${Date.now()}` : undefined;
     const now = Date.now();
 
+    // Task codes must never repeat: instead of trusting the in-memory array
+    // length (which drifts after deletions or when several users create
+    // tasks around the same time), scan every existing code for the highest
+    // "TAR-####" number actually in use and count up from there.
+    const highestExistingCodeNumber = tasks.reduce((max, t) => {
+      const match = /^TAR-(\d+)$/.exec(t.code || '');
+      if (!match) return max;
+      const num = parseInt(match[1], 10);
+      return Number.isFinite(num) && num > max ? num : max;
+    }, 0);
+
     const createdTasks: Task[] = datesToGenerate.map((dateStr, idx) => {
-      const taskCodeNumber = tasks.length + idx + 1;
+      const taskCodeNumber = highestExistingCodeNumber + idx + 1;
       const code = `TAR-${String(taskCodeNumber).padStart(4, '0')}`;
       return {
         id: `tsk-${now}-${idx}`,

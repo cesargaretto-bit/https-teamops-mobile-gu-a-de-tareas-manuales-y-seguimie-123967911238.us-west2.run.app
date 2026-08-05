@@ -137,6 +137,7 @@ export function generatePDFReport(title: string, collaborators: Collaborator[], 
         .status-completed { color: #059669; font-weight: bold; }
         .status-in_progress { color: #d97706; font-weight: bold; }
         .status-blocked { color: #dc2626; font-weight: bold; }
+        .status-incomplete { color: #7c3aed; font-weight: bold; }
         .footer { margin-top: 40px; font-size: 11px; color: #64748b; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px; }
       </style>
     </head>

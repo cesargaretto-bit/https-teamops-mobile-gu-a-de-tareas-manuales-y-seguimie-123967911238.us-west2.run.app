@@ -147,6 +147,27 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   };
   const teamComplianceData = buildComplianceBuckets();
 
+  // --- KPI: Compliance by Category and by Priority, over the same
+  // period/user filters as the team compliance chart above. ---
+  const buildComplianceByField = (getField: (t: Task) => string) => {
+    const tally: Record<string, { total: number; completed: number }> = {};
+    tasksInSelectedPeriods.forEach(t => {
+      const key = getField(t) || 'Sin definir';
+      if (!tally[key]) tally[key] = { total: 0, completed: 0 };
+      tally[key].total += 1;
+      if (t.status === 'completed') tally[key].completed += 1;
+    });
+    return Object.entries(tally)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([key, v]) => ({
+        key,
+        'Cumplimiento (%)': v.total > 0 ? Math.round((v.completed / v.total) * 1000) / 10 : 0,
+        total: v.total
+      }));
+  };
+  const categoryComplianceData = buildComplianceByField(t => t.category);
+  const priorityComplianceData = buildComplianceByField(t => t.priority);
+
   // --- Monthly compliance trend (team average completion rate per month) ---
   // Always includes the current month plus every month present in the
   // collaborators' recorded history, so it keeps updating automatically
@@ -399,6 +420,52 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
           <p className="text-[10px] text-slate-400">
             Cumplimiento = tareas completadas ÷ tareas totales del período. Usá los filtros de arriba para elegir período(s), granularidad (día/semana/mes/acumulado) y colaboradores.
           </p>
+        </div>
+
+        {/* Chart: Compliance by Category */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-emerald-500" />
+            Cumplimiento por Categoría
+          </h3>
+          {categoryComplianceData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={categoryComplianceData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={10} interval={0} angle={-15} textAnchor="end" height={50} />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                  <Tooltip />
+                  <Bar dataKey="Cumplimiento (%)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+          )}
+        </div>
+
+        {/* Chart: Compliance by Priority */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-emerald-500" />
+            Cumplimiento por Prioridad
+          </h3>
+          {priorityComplianceData.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={priorityComplianceData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                  <Tooltip />
+                  <Bar dataKey="Cumplimiento (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+          )}
         </div>
 
         {/* Chart: Time Efficiency per Collaborator */}

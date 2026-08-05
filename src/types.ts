@@ -1,5 +1,5 @@
 export type Priority = 'Alta' | 'Media' | 'Baja';
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'incomplete';
 export type Category = 'Mantenimiento' | 'Seguridad' | 'Operaciones' | 'Calidad' | 'Inventario' | 'Logística';
 export type TaskPeriodicity = 'unica' | 'diaria' | 'semanal' | 'mensual';
 

@@ -137,9 +137,15 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
     return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo && matchesCollaborator;
   });
 
+  // Current time as HH:MM, used to auto-stamp start/end times.
+  const nowTimeHHMM = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   // Handle Step Checkbox Toggle
   const handleToggleStep = (task: Task, stepId: string) => {
-    const updatedSteps = task.steps.map(s => 
+    const updatedSteps = task.steps.map(s =>
       s.id === stepId ? { ...s, completed: !s.completed } : s
     );
 
@@ -160,10 +166,27 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       }
     }
 
+    // Autonomous time tracking: the moment the operator checks the first
+    // step, the start time is stamped automatically (if not already set),
+    // and the moment every step is checked, the end time is stamped
+    // automatically (if not already set) — no manual entry required.
+    let nextStartTime = task.startTime;
+    let nextEndTime = task.endTime;
+    if (completedCount > 0 && !nextStartTime) {
+      nextStartTime = nowTimeHHMM();
+    }
+    if (newStatus === 'completed' && !nextEndTime) {
+      nextEndTime = nowTimeHHMM();
+    }
+    const computedMinutes = computeMinutesBetween(nextStartTime, nextEndTime);
+
     const updatedTask: Task = {
       ...task,
       steps: updatedSteps,
       status: newStatus,
+      startTime: nextStartTime,
+      endTime: nextEndTime,
+      actualMinutes: computedMinutes !== null ? computedMinutes : task.actualMinutes,
       synced: isOnline,
       completedAt: newStatus === 'completed' ? new Date().toLocaleString('es-ES') : task.completedAt
     };
@@ -325,7 +348,8 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
             { id: 'pending', label: 'Pendientes' },
             { id: 'in_progress', label: 'En Proceso' },
             { id: 'completed', label: 'Completadas' },
-            { id: 'blocked', label: 'Bloqueadas' }
+            { id: 'blocked', label: 'Bloqueadas' },
+            { id: 'incomplete', label: 'Incompletas' }
           ].map(st => (
             <button
               key={st.id}
@@ -492,7 +516,13 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                       {task.code}
                     </td>
                     <td className="px-3 py-2 max-w-[220px]">
-                      <span className="font-semibold text-slate-900 dark:text-white truncate block">{task.title}</span>
+                      <button
+                        onClick={() => setActiveTaskDetail(task)}
+                        title="Ver detalle de la tarea"
+                        className="font-semibold text-slate-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline truncate block text-left w-full"
+                      >
+                        {task.title}
+                      </button>
                     </td>
                     <td className="px-3 py-2">
                       <select
@@ -505,6 +535,8 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                             ? 'bg-amber-100 dark:bg-amber-950 border-amber-300 text-amber-800 dark:text-amber-300'
                             : task.status === 'blocked'
                             ? 'bg-red-100 dark:bg-red-950 border-red-300 text-red-800 dark:text-red-300'
+                            : task.status === 'incomplete'
+                            ? 'bg-purple-100 dark:bg-purple-950 border-purple-300 text-purple-800 dark:text-purple-300'
                             : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
                         }`}
                       >
@@ -512,6 +544,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                         <option value="in_progress">En Proceso</option>
                         <option value="completed">Completada</option>
                         <option value="blocked">Bloqueada</option>
+                        <option value="incomplete">Incompleta</option>
                       </select>
                     </td>
                     <td className="px-3 py-2">
@@ -620,9 +653,13 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
 
                   {/* Title & Description */}
                   <div>
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    <button
+                      onClick={() => setActiveTaskDetail(task)}
+                      title="Ver detalle de la tarea"
+                      className="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-600 dark:group-hover:text-emerald-400 hover:underline transition-colors text-left"
+                    >
                       {task.title}
-                    </h3>
+                    </button>
                     <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 mt-1">
                       {task.description}
                     </p>
@@ -744,6 +781,8 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                           ? 'bg-amber-100 dark:bg-amber-950 border-amber-300 text-amber-800 dark:text-amber-300'
                           : task.status === 'blocked'
                           ? 'bg-red-100 dark:bg-red-950 border-red-300 text-red-800 dark:text-red-300'
+                          : task.status === 'incomplete'
+                          ? 'bg-purple-100 dark:bg-purple-950 border-purple-300 text-purple-800 dark:text-purple-300'
                           : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
                       }`}
                     >
@@ -751,6 +790,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                       <option value="in_progress">En Proceso</option>
                       <option value="completed">Completada</option>
                       <option value="blocked">Bloqueada</option>
+                      <option value="incomplete">Incompleta</option>
                     </select>
 
                     <button
