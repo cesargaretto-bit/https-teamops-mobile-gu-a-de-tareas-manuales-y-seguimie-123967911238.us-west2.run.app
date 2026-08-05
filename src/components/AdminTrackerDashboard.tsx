@@ -56,12 +56,27 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
 
   const globalCompletionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
+  // Collaborator filter scoped ONLY to the "Distribución de Tareas del Día" pie chart.
+  // Empty array = show all collaborators (no filtering).
+  const [selectedPieUserIds, setSelectedPieUserIds] = useState<string[]>([]);
+  const [isPieUserFilterOpen, setIsPieUserFilterOpen] = useState(false);
+
+  const togglePieUser = (userId: string) => {
+    setSelectedPieUserIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const pieFilteredTasks = selectedPieUserIds.length === 0
+    ? tasks
+    : tasks.filter(t => selectedPieUserIds.includes(t.assignedUserId));
+
   // Chart Data: Status Distribution
   const pieData = [
-    { name: 'Completadas', value: completedTasks, color: '#10b981' },
-    { name: 'En Proceso', value: inProgressTasks, color: '#f59e0b' },
-    { name: 'Pendientes', value: pendingTasks, color: '#3b82f6' },
-    { name: 'Bloqueadas', value: blockedTasks, color: '#ef4444' }
+    { name: 'Completadas', value: pieFilteredTasks.filter(t => t.status === 'completed').length, color: '#10b981' },
+    { name: 'En Proceso', value: pieFilteredTasks.filter(t => t.status === 'in_progress').length, color: '#f59e0b' },
+    { name: 'Pendientes', value: pieFilteredTasks.filter(t => t.status === 'pending').length, color: '#3b82f6' },
+    { name: 'Bloqueadas', value: pieFilteredTasks.filter(t => t.status === 'blocked').length, color: '#ef4444' }
   ];
 
   // Chart Data: Department Performance Comparison — computed live from the
@@ -276,10 +291,63 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Chart 1: Status Breakdown Pie Chart */}
         <div className="lg:col-span-5 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <PieChart className="w-4 h-4 text-emerald-500" />
-            Distribución de Tareas del Día
-          </h3>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <PieChart className="w-4 h-4 text-emerald-500" />
+              Distribución de Tareas del Día
+            </h3>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsPieUserFilterOpen(prev => !prev)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
+              >
+                <Filter className="w-3.5 h-3.5" />
+                {selectedPieUserIds.length === 0
+                  ? 'Todos los colaboradores'
+                  : `${selectedPieUserIds.length} seleccionado${selectedPieUserIds.length > 1 ? 's' : ''}`}
+              </button>
+
+              {isPieUserFilterOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsPieUserFilterOpen(false)} />
+                  <div className="absolute right-0 mt-1 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-20 p-2 space-y-1">
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-slate-100 dark:border-slate-700">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Colaboradores</span>
+                      {selectedPieUserIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPieUserIds([])}
+                          className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Limpiar
+                        </button>
+                      )}
+                    </div>
+                    <label className="flex items-center gap-2 px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={selectedPieUserIds.length === 0}
+                        onChange={() => setSelectedPieUserIds([])}
+                      />
+                      Todos los colaboradores
+                    </label>
+                    {collaborators.map(c => (
+                      <label key={c.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs text-slate-700 dark:text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={selectedPieUserIds.includes(c.id)}
+                          onChange={() => togglePieUser(c.id)}
+                        />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
           <div className="h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">

@@ -169,6 +169,24 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   const categoryComplianceData = buildComplianceByField(t => t.category);
   const priorityComplianceData = buildComplianceByField(t => t.priority);
 
+  // --- KPI: Tareas Realizadas vs Totales por Colaborador — respects both the
+  // collaborator filter and the period/granularity filters above, so it
+  // always reflects "de las tareas de este período, cuántas hizo cada
+  // colaborador" in both raw counts and percentage. ---
+  const collaboratorComplianceData = filteredCollaborators
+    .map(c => {
+      const theirTasks = tasksInSelectedPeriods.filter(t => t.assignedUserId === c.id);
+      const completed = theirTasks.filter(t => t.status === 'completed').length;
+      const total = theirTasks.length;
+      return {
+        name: c.name.split(' ')[0],
+        'Completadas': completed,
+        'Totales': total,
+        'Cumplimiento (%)': total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
+      };
+    })
+    .filter(d => d.Totales > 0);
+
   // --- Monthly compliance trend (team average completion rate per month) ---
   // Always includes the current month plus every month present in the
   // collaborators' recorded history, so it keeps updating automatically
@@ -234,7 +252,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 
   // --- Drag-and-drop chart reordering, remembered per browser (localStorage) ---
   const CHART_ORDER_KEY = 'teamops_reports_chart_order';
-  const DEFAULT_CHART_ORDER = ['teamCompliance', 'category', 'priority', 'efficiency', 'workload', 'trend'];
+  const DEFAULT_CHART_ORDER = ['teamCompliance', 'category', 'priority', 'collabValues', 'collabPercent', 'efficiency', 'workload', 'trend'];
   const [chartOrder, setChartOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(CHART_ORDER_KEY);
@@ -329,6 +347,50 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
                 <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
                 <Tooltip />
                 <Bar dataKey="Cumplimiento (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </ReBarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+        )
+      )
+    },
+    collabValues: {
+      title: 'Tareas Realizadas vs. Totales por Colaborador (valores)',
+      icon: <UserCheck className="w-4 h-4 text-emerald-500" />,
+      node: (
+        collaboratorComplianceData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ReBarChart data={collaboratorComplianceData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Bar dataKey="Totales" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Completadas" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </ReBarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 py-6 text-center">No hay tareas registradas para el período y usuarios seleccionados.</p>
+        )
+      )
+    },
+    collabPercent: {
+      title: 'Cumplimiento por Colaborador (%)',
+      icon: <UserCheck className="w-4 h-4 text-emerald-500" />,
+      node: (
+        collaboratorComplianceData.length > 0 ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ReBarChart data={collaboratorComplianceData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="Cumplimiento (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
