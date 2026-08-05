@@ -47,12 +47,26 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const theme = getThemeClasses(themeConfig.primaryColor);
 
+  // Date range filter for the whole Admin panel (KPIs + charts). Defaults to
+  // today's date, matching the request to preload the dashboard with the
+  // current day's data. Clearing both fields shows all tasks regardless of date.
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [dateFrom, setDateFrom] = useState<string>(todayStr);
+  const [dateTo, setDateTo] = useState<string>(todayStr);
+
+  const tasksInRange = tasks.filter(t => {
+    if (!t.dueDate) return true;
+    if (dateFrom && t.dueDate < dateFrom) return false;
+    if (dateTo && t.dueDate > dateTo) return false;
+    return true;
+  });
+
   // Overall Statistics
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'completed').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
-  const blockedTasks = tasks.filter(t => t.status === 'blocked').length;
-  const pendingTasks = tasks.filter(t => t.status === 'pending').length;
+  const totalTasks = tasksInRange.length;
+  const completedTasks = tasksInRange.filter(t => t.status === 'completed').length;
+  const inProgressTasks = tasksInRange.filter(t => t.status === 'in_progress').length;
+  const blockedTasks = tasksInRange.filter(t => t.status === 'blocked').length;
+  const pendingTasks = tasksInRange.filter(t => t.status === 'pending').length;
 
   const globalCompletionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -68,8 +82,8 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
   };
 
   const pieFilteredTasks = selectedPieUserIds.length === 0
-    ? tasks
-    : tasks.filter(t => selectedPieUserIds.includes(t.assignedUserId));
+    ? tasksInRange
+    : tasksInRange.filter(t => selectedPieUserIds.includes(t.assignedUserId));
 
   // Chart Data: Status Distribution
   const pieData = [
@@ -84,7 +98,7 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
   // was hardcoded sample data and never reflected real changes).
   const departmentOf = (userId: string) => collaborators.find(c => c.id === userId)?.department || 'Sin Departamento';
   const deptTally: Record<string, { total: number; completadas: number }> = {};
-  tasks.forEach(t => {
+  tasksInRange.forEach(t => {
     const dept = departmentOf(t.assignedUserId);
     if (!deptTally[dept]) deptTally[dept] = { total: 0, completadas: 0 };
     deptTally[dept].total += 1;
@@ -138,7 +152,42 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">Fecha:</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="text-xs bg-transparent border-none focus:outline-none text-slate-700 dark:text-slate-200"
+            />
+            <span className="text-slate-400 text-xs">–</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="text-xs bg-transparent border-none focus:outline-none text-slate-700 dark:text-slate-200"
+            />
+            {(dateFrom !== todayStr || dateTo !== todayStr) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); }}
+                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline ml-1"
+              >
+                Hoy
+              </button>
+            )}
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:underline ml-1"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
           {onNavigateToCollaborators && (
             <button
               onClick={onNavigateToCollaborators}
