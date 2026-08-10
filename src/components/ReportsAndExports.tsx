@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileSpreadsheet,
   FileText,
@@ -75,17 +75,26 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 
   // "Seguimiento" tasks are tracking-only and must never count towards
   // productivity/compliance metrics — excluded from every chart/table below.
-  const productivityTasks = tasks.filter(t => t.category !== 'Seguimiento');
+  // Memoized throughout this component: this dashboard renders 8+ charts off
+  // of a handful of shared derived arrays (productivityTasks, filteredTasksByUser,
+  // tasksInSelectedPeriods, ...), so without memoization every one of those
+  // filter/reduce passes over the full task list would silently re-run on
+  // every render — including renders triggered by something as small as
+  // opening a dropdown or dragging a chart.
+  const productivityTasks = useMemo(
+    () => tasks.filter(t => t.category !== 'Seguimiento'),
+    [tasks]
+  );
 
   // --- Period selector: now supports multi-selection of months ---
-  const monthsSeen = Array.from(
+  const monthsSeen = useMemo(() => Array.from(
     new Set([
       ...collaborators.flatMap(c => c.monthlyPerformance.map(m => m.month)),
       ...productivityTasks.map(t => (t.dueDate || '').slice(0, 7)).filter(Boolean),
       currentMonthKey
     ])
-  ).sort();
-  const availableMonths = [...monthsSeen].sort().reverse();
+  ).sort(), [collaborators, productivityTasks, currentMonthKey]);
+  const availableMonths = useMemo(() => [...monthsSeen].sort().reverse(), [monthsSeen]);
 
   const [selectedMonths, setSelectedMonths] = useState<string[]>([currentMonthKey]);
   const [isPeriodFilterOpen, setIsPeriodFilterOpen] = useState(false);
@@ -104,18 +113,23 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   const toggleUserFilter = (id: string) => {
     setSelectedUserIds(prev => (prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]));
   };
-  const filteredCollaborators = selectedUserIds.length > 0
-    ? collaborators.filter(c => selectedUserIds.includes(c.id))
-    : collaborators;
-  const filteredTasksByUser = selectedUserIds.length > 0
-    ? productivityTasks.filter(t => selectedUserIds.includes(t.assignedUserId))
-    : productivityTasks;
+  const filteredCollaborators = useMemo(() => (
+    selectedUserIds.length > 0
+      ? collaborators.filter(c => selectedUserIds.includes(c.id))
+      : collaborators
+  ), [collaborators, selectedUserIds]);
+  const filteredTasksByUser = useMemo(() => (
+    selectedUserIds.length > 0
+      ? productivityTasks.filter(t => selectedUserIds.includes(t.assignedUserId))
+      : productivityTasks
+  ), [productivityTasks, selectedUserIds]);
 
   // --- KPI Chart: Team Compliance (tasks completed vs. total), computed directly
   // from tasks so it can be broken down by day, week, current month or
   // accumulated across the selected periods — not just monthly averages. ---
-  const tasksInSelectedPeriods = filteredTasksByUser.filter(t =>
-    effectiveMonths.includes((t.dueDate || '').slice(0, 7))
+  const tasksInSelectedPeriods = useMemo(
+    () => filteredTasksByUser.filter(t => effectiveMonths.includes((t.dueDate || '').slice(0, 7))),
+    [filteredTasksByUser, effectiveMonths]
   );
 
   const buildComplianceBuckets = (): { key: string; 'Cumplimiento (%)': number; total: number }[] => {
@@ -151,7 +165,10 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
         total: v.total
       }));
   };
-  const teamComplianceData = buildComplianceBuckets();
+  const teamComplianceData = useMemo(
+    buildComplianceBuckets,
+    [tasksInSelectedPeriods, granularity, effectiveMonths, currentMonthKey]
+  );
 
   // --- KPI: Compliance by Category and by Priority, over the same
   // period/user filters as the team compliance chart above. ---
@@ -171,14 +188,20 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
         total: v.total
       }));
   };
-  const categoryComplianceData = buildComplianceByField(t => t.category);
-  const priorityComplianceData = buildComplianceByField(t => t.priority);
+  const categoryComplianceData = useMemo(
+    () => buildComplianceByField(t => t.category),
+    [tasksInSelectedPeriods]
+  );
+  const priorityComplianceData = useMemo(
+    () => buildComplianceByField(t => t.priority),
+    [tasksInSelectedPeriods]
+  );
 
   // --- KPI: Tareas Realizadas vs Totales por Colaborador — respects both the
   // collaborator filter and the period/granularity filters above, so it
   // always reflects "de las tareas de este período, cuántas hizo cada
   // colaborador" in both raw counts and percentage. ---
-  const collaboratorComplianceData = filteredCollaborators
+  const collaboratorComplianceData = useMemo(() => filteredCollaborators
     .map(c => {
       const theirTasks = tasksInSelectedPeriods.filter(t => t.assignedUserId === c.id);
       const completed = theirTasks.filter(t => t.status === 'completed').length;
@@ -191,13 +214,13 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
         'Cumplimiento (%)': total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
       };
     })
-    .filter(d => d.Totales > 0);
+    .filter(d => d.Totales > 0), [filteredCollaborators, tasksInSelectedPeriods]);
 
   // --- Monthly compliance trend (team average completion rate per month) ---
   // Always includes the current month plus every month present in the
   // collaborators' recorded history, so it keeps updating automatically
   // period after period instead of needing hardcoded month options.
-  const complianceTrendData = monthsSeen.map(month => {
+  const complianceTrendData = useMemo(() => monthsSeen.map(month => {
     const entries = filteredCollaborators
       .map(c => c.monthlyPerformance.find(m => m.month === month))
       .filter((m): m is NonNullable<typeof m> => Boolean(m));
@@ -208,13 +231,13 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       ? Math.round((entries.reduce((sum, e) => sum + e.sopComplianceRate, 0) / entries.length) * 10) / 10
       : 0;
     return { month, 'Cumplimiento (%)': avgCompletion, 'Apego a SOP (%)': avgSopCompliance };
-  });
+  }), [monthsSeen, filteredCollaborators]);
 
   // --- Time efficiency per collaborator (real vs. estimated minutes) ---
   // Includes every collaborator matching the current filters (even those with
   // no logged time yet, shown as 0) so the chart is a complete team comparison
   // rather than only showing whoever happens to have time logged.
-  const efficiencyData = filteredCollaborators.map(c => {
+  const efficiencyData = useMemo(() => filteredCollaborators.map(c => {
     const theirTasks = productivityTasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
     const realMin = theirTasks.reduce((sum, t) => sum + t.actualMinutes, 0);
     const estMin = theirTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0);
@@ -226,16 +249,16 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       eficiencia: efficiency,
       tasksWithTime: theirTasks.length
     };
-  });
+  }), [filteredCollaborators, productivityTasks]);
 
   // --- Workload (carga horaria) — total minutes worked per collaborator across all logged tasks ---
   // Includes every collaborator matching the current filters, even those with 0 hours logged.
-  const workloadData = filteredCollaborators.map(c => {
+  const workloadData = useMemo(() => filteredCollaborators.map(c => {
     const totalMin = productivityTasks
       .filter(t => t.assignedUserId === c.id && t.actualMinutes > 0)
       .reduce((sum, t) => sum + t.actualMinutes, 0);
     return { name: c.name.split(' ')[0], 'Horas Trabajadas': Math.round((totalMin / 60) * 10) / 10 };
-  });
+  }), [filteredCollaborators, productivityTasks]);
 
   // Aggregated performance for the collaborator table across every selected month
   const getAggregatedPerf = (collab: Collaborator) => {

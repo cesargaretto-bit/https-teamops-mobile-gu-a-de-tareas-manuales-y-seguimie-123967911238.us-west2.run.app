@@ -103,7 +103,25 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       setSortDirection('asc');
     }
   };
-  const [taskDisplayMode, setTaskDisplayMode] = useState<'cards' | 'list' | 'agenda'>('cards');
+  // Display mode (Tarjetas/Lista/Agenda) is remembered as a lasting per-browser
+  // preference (localStorage), same as the last user selection, so it stays put
+  // when navigating to another section of the app and back — it doesn't reset
+  // to "Tarjetas" just because the component remounted.
+  const DISPLAY_MODE_STORAGE_KEY = 'teamops_task_display_mode';
+  const [taskDisplayMode, setTaskDisplayMode] = useState<'cards' | 'list' | 'agenda'>(() => {
+    try {
+      const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
+      return saved === 'cards' || saved === 'list' || saved === 'agenda' ? saved : 'cards';
+    } catch {
+      return 'cards';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, taskDisplayMode);
+    } catch {}
+  }, [taskDisplayMode]);
   const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
   const [activeTimerTaskId, setActiveTimerTaskId] = useState<string | null>(null);
   const [uploadingProofForTaskId, setUploadingProofForTaskId] = useState<string | null>(null);
@@ -146,58 +164,67 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
     return 1;
   }, [taskToDelete, tasks]);
 
-  // Filter tasks
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = 
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.assignedUserName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (task.countryName && task.countryName.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filter + sort tasks. Memoized so this (potentially expensive over a large
+  // task list) recalculation only re-runs when the task list or one of the
+  // filter/sort controls actually changes — not on every unrelated re-render
+  // (e.g. opening/closing a dropdown, typing in an unrelated field).
+  const filteredTasks = React.useMemo(() => {
+    return tasks.filter(task => {
+      const matchesSearch =
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.assignedUserName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (task.countryName && task.countryName.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus;
-    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(task.category);
-    const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
-    
-    const selectedCountryObj = countries.find(c => c.id === selectedCountry);
-    const matchesCountry = selectedCountry === 'all' || 
-      task.countryId === selectedCountry || 
-      task.countryName === selectedCountry ||
-      (selectedCountryObj && (
-        task.countryName?.toLowerCase() === selectedCountryObj.name.toLowerCase() ||
-        task.countryName?.toLowerCase() === selectedCountryObj.code.toLowerCase() ||
-        task.countryId === selectedCountryObj.id
-      ));
+      const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus;
+      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(task.category);
+      const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
 
-    const matchesDateFrom = !dateFrom || (task.dueDate && task.dueDate >= dateFrom);
-    const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
+      const selectedCountryObj = countries.find(c => c.id === selectedCountry);
+      const matchesCountry = selectedCountry === 'all' ||
+        task.countryId === selectedCountry ||
+        task.countryName === selectedCountry ||
+        (selectedCountryObj && (
+          task.countryName?.toLowerCase() === selectedCountryObj.name.toLowerCase() ||
+          task.countryName?.toLowerCase() === selectedCountryObj.code.toLowerCase() ||
+          task.countryId === selectedCountryObj.id
+        ));
 
-    const matchesCollaborator =
-      selectedCollaboratorIds.length === 0 || selectedCollaboratorIds.includes(task.assignedUserId);
+      const matchesDateFrom = !dateFrom || (task.dueDate && task.dueDate >= dateFrom);
+      const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo && matchesCollaborator;
-  }).sort((a, b) => {
-    if (!sortKey) return 0;
-    const progressOf = (t: Task) => {
-      const total = t.steps.length;
-      const done = t.steps.filter(s => s.completed).length;
-      return total ? (done / total) * 100 : (t.status === 'completed' ? 100 : 0);
-    };
-    let valA: string | number;
-    let valB: string | number;
-    if (sortKey === 'progress') {
-      valA = progressOf(a);
-      valB = progressOf(b);
-    } else {
-      valA = (a[sortKey] || '') as string;
-      valB = (b[sortKey] || '') as string;
-    }
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+      const matchesCollaborator =
+        selectedCollaboratorIds.length === 0 || selectedCollaboratorIds.includes(task.assignedUserId);
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo && matchesCollaborator;
+    }).sort((a, b) => {
+      if (!sortKey) return 0;
+      const progressOf = (t: Task) => {
+        const total = t.steps.length;
+        const done = t.steps.filter(s => s.completed).length;
+        return total ? (done / total) * 100 : (t.status === 'completed' ? 100 : 0);
+      };
+      let valA: string | number;
+      let valB: string | number;
+      if (sortKey === 'progress') {
+        valA = progressOf(a);
+        valB = progressOf(b);
+      } else {
+        valA = (a[sortKey] || '') as string;
+        valB = (b[sortKey] || '') as string;
+      }
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+        return sortDirection === 'asc' ? cmp : -cmp;
+      }
+      const cmp = (valA as number) - (valB as number);
       return sortDirection === 'asc' ? cmp : -cmp;
-    }
-    const cmp = (valA as number) - (valB as number);
-    return sortDirection === 'asc' ? cmp : -cmp;
-  });
+    });
+  }, [
+    tasks, searchQuery, selectedStatus, selectedCategories, selectedPriority,
+    selectedCountry, countries, dateFrom, dateTo, selectedCollaboratorIds,
+    sortKey, sortDirection
+  ]);
 
   // Current time as HH:MM, used to auto-stamp start/end times.
   const nowTimeHHMM = () => {

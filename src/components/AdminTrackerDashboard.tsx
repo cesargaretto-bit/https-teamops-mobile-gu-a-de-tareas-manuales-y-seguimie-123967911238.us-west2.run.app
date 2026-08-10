@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Users, 
   CheckCircle2, 
@@ -56,14 +56,20 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
 
   // "Seguimiento" tasks are tracking-only and must never count towards
   // productivity/compliance metrics (KPIs, charts) shown in this panel.
-  const productivityTasks = tasks.filter(t => t.category !== 'Seguimiento');
+  // Memoized: these two derive from the full task list + the date filter, and
+  // several KPIs/charts below reuse "tasksInRange" — without memoization every
+  // one of those would silently redo this same filter pass on every render.
+  const productivityTasks = useMemo(
+    () => tasks.filter(t => t.category !== 'Seguimiento'),
+    [tasks]
+  );
 
-  const tasksInRange = productivityTasks.filter(t => {
+  const tasksInRange = useMemo(() => productivityTasks.filter(t => {
     if (!t.dueDate) return true;
     if (dateFrom && t.dueDate < dateFrom) return false;
     if (dateTo && t.dueDate > dateTo) return false;
     return true;
-  });
+  }), [productivityTasks, dateFrom, dateTo]);
 
   // Overall Statistics
   const totalTasks = tasksInRange.length;
@@ -85,35 +91,39 @@ export const AdminTrackerDashboard: React.FC<AdminTrackerDashboardProps> = ({
     );
   };
 
-  const pieFilteredTasks = selectedPieUserIds.length === 0
-    ? tasksInRange
-    : tasksInRange.filter(t => selectedPieUserIds.includes(t.assignedUserId));
+  const pieFilteredTasks = useMemo(() => (
+    selectedPieUserIds.length === 0
+      ? tasksInRange
+      : tasksInRange.filter(t => selectedPieUserIds.includes(t.assignedUserId))
+  ), [tasksInRange, selectedPieUserIds]);
 
   // Chart Data: Status Distribution
-  const pieData = [
+  const pieData = useMemo(() => [
     { name: 'Completadas', value: pieFilteredTasks.filter(t => t.status === 'completed').length, color: '#10b981' },
     { name: 'En Proceso', value: pieFilteredTasks.filter(t => t.status === 'in_progress').length, color: '#f59e0b' },
     { name: 'Pendientes', value: pieFilteredTasks.filter(t => t.status === 'pending').length, color: '#3b82f6' },
     { name: 'Bloqueadas', value: pieFilteredTasks.filter(t => t.status === 'blocked').length, color: '#ef4444' }
-  ];
+  ], [pieFilteredTasks]);
 
   // Chart Data: Department Performance Comparison — computed live from the
   // actual tasks assigned to each department's collaborators (previously this
   // was hardcoded sample data and never reflected real changes).
-  const departmentOf = (userId: string) => collaborators.find(c => c.id === userId)?.department || 'Sin Departamento';
-  const deptTally: Record<string, { total: number; completadas: number }> = {};
-  tasksInRange.forEach(t => {
-    const dept = departmentOf(t.assignedUserId);
-    if (!deptTally[dept]) deptTally[dept] = { total: 0, completadas: 0 };
-    deptTally[dept].total += 1;
-    if (t.status === 'completed') deptTally[dept].completadas += 1;
-  });
-  const deptPerformanceData = Object.entries(deptTally).map(([department, v]) => ({
-    department,
-    completadas: v.completadas,
-    objetivo: v.total,
-    tasa: v.total > 0 ? Math.round((v.completadas / v.total) * 100) : 0
-  }));
+  const deptPerformanceData = useMemo(() => {
+    const departmentOf = (userId: string) => collaborators.find(c => c.id === userId)?.department || 'Sin Departamento';
+    const deptTally: Record<string, { total: number; completadas: number }> = {};
+    tasksInRange.forEach(t => {
+      const dept = departmentOf(t.assignedUserId);
+      if (!deptTally[dept]) deptTally[dept] = { total: 0, completadas: 0 };
+      deptTally[dept].total += 1;
+      if (t.status === 'completed') deptTally[dept].completadas += 1;
+    });
+    return Object.entries(deptTally).map(([department, v]) => ({
+      department,
+      completadas: v.completadas,
+      objetivo: v.total,
+      tasa: v.total > 0 ? Math.round((v.completadas / v.total) * 100) : 0
+    }));
+  }, [tasksInRange, collaborators]);
 
   // Live field-status counts for the KPI card (previously hardcoded "3 en campo, 1 en pausa")
   const inFieldNow = collaborators.filter(c => c.activeStatus === 'En Campo').length;
