@@ -339,94 +339,128 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
         </div>
 
         {/* Filter Badges */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-xs">
-          <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Estado:
-          </span>
-          {[
-            { id: 'all', label: 'Todas' },
-            { id: 'pending', label: 'Pendientes' },
-            { id: 'in_progress', label: 'En Proceso' },
-            { id: 'completed', label: 'Completadas' },
-            { id: 'blocked', label: 'Bloqueadas' },
-            { id: 'incomplete', label: 'Incompletas' }
-          ].map(st => (
-            <button
-              key={st.id}
-              onClick={() => setSelectedStatus(st.id)}
-              className={`px-2.5 py-1 rounded-md transition-all font-medium ${
-                selectedStatus === st.id
-                  ? `${theme.bg} text-white`
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              {st.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2.5 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 shrink-0">
+              <Filter className="w-3 h-3" /> Estado:
+            </span>
+            {[
+              { id: 'all', label: 'Todas' },
+              { id: 'pending', label: 'Pendientes' },
+              { id: 'in_progress', label: 'En Proceso' },
+              { id: 'completed', label: 'Completadas' },
+              { id: 'blocked', label: 'Bloqueadas' },
+              { id: 'incomplete', label: 'Incompletas' }
+            ].map(st => (
+              <button
+                key={st.id}
+                onClick={() => setSelectedStatus(st.id)}
+                className={`px-2.5 py-1 rounded-md transition-all font-medium shrink-0 ${
+                  selectedStatus === st.id
+                    ? `${theme.bg} text-white`
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
 
-          <span className="text-slate-500 dark:text-slate-400 font-medium ml-2 flex items-center gap-1">
-            <Globe className="w-3 h-3 text-blue-500" /> País:
-          </span>
-          {[
-            { id: 'all', label: 'Todos' },
-            ...(countries.length > 0
-              ? countries.map(c => ({
-                  id: c.id,
-                  label: `${c.flagEmoji || '🌐'} ${c.code || c.name}`
-                }))
-              : [
-                  { id: 'cnt-ar', label: '🇦🇷 AR' },
-                  { id: 'cnt-mx', label: '🇲🇽 MX' },
-                  { id: 'cnt-br', label: '🇧🇷 BR' },
-                  { id: 'cnt-cl', label: '🇨🇱 CL' },
-                  { id: 'cnt-co', label: '🇨🇴 CO' },
-                  { id: 'cnt-es', label: '🇪🇸 ES' }
-                ])
-          ].map(c => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCountry(c.id)}
-              className={`px-2.5 py-1 rounded-md transition-all font-semibold text-xs ${
-                selectedCountry === c.id
-                  ? `bg-blue-600 text-white shadow-sm`
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 shrink-0">
+              <Globe className="w-3 h-3 text-blue-500" /> País:
+            </span>
+            {[
+              { id: 'all', label: 'Todos' },
+              ...(countries.length > 0
+                ? countries.map(c => ({
+                    id: c.id,
+                    label: `${c.flagEmoji || '🌐'} ${c.code || c.name}`
+                  }))
+                : [
+                    { id: 'cnt-ar', label: '🇦🇷 AR' },
+                    { id: 'cnt-mx', label: '🇲🇽 MX' },
+                    { id: 'cnt-br', label: '🇧🇷 BR' },
+                    { id: 'cnt-cl', label: '🇨🇱 CL' },
+                    { id: 'cnt-co', label: '🇨🇴 CO' },
+                    { id: 'cnt-es', label: '🇪🇸 ES' }
+                  ])
+            ].map(c => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCountry(c.id)}
+                className={`px-2.5 py-1 rounded-md transition-all font-semibold text-xs shrink-0 ${
+                  selectedCountry === c.id
+                    ? `bg-blue-600 text-white shadow-sm`
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
 
-          <span className="text-slate-500 dark:text-slate-400 font-medium ml-2 flex items-center gap-1">
-            <Calendar className="w-3 h-3 text-emerald-500" /> Fecha:
-          </span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            title="Desde"
-          />
-          <span className="text-slate-400">–</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            title="Hasta"
-          />
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-              title="Limpiar filtro de fechas"
-            >
-              ✕ Limpiar
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 shrink-0">
+              🏷️ Categoría:
+            </span>
+            {[
+              { id: 'all', label: 'Todas' },
+              { id: 'Mantenimiento', label: 'Mantenimiento' },
+              { id: 'Seguridad', label: 'Seguridad' },
+              { id: 'Operaciones', label: 'Operaciones' },
+              { id: 'Calidad', label: 'Calidad' },
+              { id: 'Inventario', label: 'Inventario' },
+              { id: 'Logística', label: 'Logística' },
+              { id: 'Seguimiento', label: 'Seguimiento' }
+            ].map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-2.5 py-1 rounded-md transition-all font-medium shrink-0 ${
+                  selectedCategory === cat.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 shrink-0">
+              <Calendar className="w-3 h-3 text-emerald-500" /> Fecha:
+            </span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[140px]"
+              title="Desde"
+            />
+            <span className="text-slate-400">–</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[140px]"
+              title="Hasta"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0"
+                title="Limpiar filtro de fechas"
+              >
+                ✕ Limpiar
+              </button>
+            )}
+          </div>
 
           {isManagerView && collaborators.length > 0 && (
-            <div className="relative">
-              <span className="text-slate-500 dark:text-slate-400 font-medium ml-2 mr-1 inline-flex items-center gap-1">
+            <div className="relative flex flex-wrap items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 font-medium mr-1 inline-flex items-center gap-1 shrink-0">
                 👤 Colaborador:
               </span>
               <button
@@ -496,6 +530,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                 <th className="px-3 py-2 text-left font-bold">Título</th>
                 <th className="px-3 py-2 text-left font-bold">Estado</th>
                 <th className="px-3 py-2 text-left font-bold">Prioridad</th>
+                <th className="px-3 py-2 text-left font-bold">Categoría</th>
                 <th className="px-3 py-2 text-left font-bold">Asignado</th>
                 <th className="px-3 py-2 text-left font-bold">País</th>
                 <th className="px-3 py-2 text-left font-bold">Fecha</th>
@@ -556,6 +591,23 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                           : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
                       }`} translate="no">
                         {task.priority}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${
+                        task.category === 'Seguimiento'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
+                          : task.category === 'Seguridad'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300'
+                          : task.category === 'Calidad'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                          : task.category === 'Inventario'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
+                          : task.category === 'Logística'
+                          ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
+                      }`}>
+                        {task.category}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
