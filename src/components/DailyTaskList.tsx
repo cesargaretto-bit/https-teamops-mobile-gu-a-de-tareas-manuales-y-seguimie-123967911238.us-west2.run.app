@@ -56,13 +56,29 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false);
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>([]);
   const [isCollaboratorFilterOpen, setIsCollaboratorFilterOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<'code' | 'title' | 'status' | 'priority' | 'category' | 'assignedUserName' | 'countryName' | 'dueDate' | 'progress' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const CATEGORY_OPTIONS = ['Mantenimiento', 'Seguridad', 'Operaciones', 'Calidad', 'Inventario', 'Logística', 'Seguimiento'];
+  const toggleCategoryFilter = (cat: string) => {
+    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+  };
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
   const [taskDisplayMode, setTaskDisplayMode] = useState<'cards' | 'list' | 'agenda'>('cards');
   const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
   const [activeTimerTaskId, setActiveTimerTaskId] = useState<string | null>(null);
@@ -115,7 +131,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       (task.countryName && task.countryName.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus;
-    const matchesCategory = selectedCategory === 'all' || task.category === selectedCategory;
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(task.category);
     const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
     
     const selectedCountryObj = countries.find(c => c.id === selectedCountry);
@@ -135,6 +151,28 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       selectedCollaboratorIds.length === 0 || selectedCollaboratorIds.includes(task.assignedUserId);
 
     return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesCountry && matchesDateFrom && matchesDateTo && matchesCollaborator;
+  }).sort((a, b) => {
+    if (!sortKey) return 0;
+    const progressOf = (t: Task) => {
+      const total = t.steps.length;
+      const done = t.steps.filter(s => s.completed).length;
+      return total ? (done / total) * 100 : (t.status === 'completed' ? 100 : 0);
+    };
+    let valA: string | number;
+    let valB: string | number;
+    if (sortKey === 'progress') {
+      valA = progressOf(a);
+      valB = progressOf(b);
+    } else {
+      valA = (a[sortKey] || '') as string;
+      valB = (b[sortKey] || '') as string;
+    }
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+      return sortDirection === 'asc' ? cmp : -cmp;
+    }
+    const cmp = (valA as number) - (valB as number);
+    return sortDirection === 'asc' ? cmp : -cmp;
   });
 
   // Current time as HH:MM, used to auto-stamp start/end times.
@@ -400,32 +438,65 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 shrink-0">
+          <div className="relative flex flex-wrap items-center gap-1">
+            <span className="text-slate-500 dark:text-slate-400 font-medium mr-1 inline-flex items-center gap-1 shrink-0">
               🏷️ Categoría:
             </span>
-            {[
-              { id: 'all', label: 'Todas' },
-              { id: 'Mantenimiento', label: 'Mantenimiento' },
-              { id: 'Seguridad', label: 'Seguridad' },
-              { id: 'Operaciones', label: 'Operaciones' },
-              { id: 'Calidad', label: 'Calidad' },
-              { id: 'Inventario', label: 'Inventario' },
-              { id: 'Logística', label: 'Logística' },
-              { id: 'Seguimiento', label: 'Seguimiento' }
-            ].map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-2.5 py-1 rounded-md transition-all font-medium shrink-0 ${
-                  selectedCategory === cat.id
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+            <button
+              onClick={() => setIsCategoryFilterOpen(o => !o)}
+              className={`px-2.5 py-1 rounded-md font-semibold text-xs border ${
+                selectedCategories.length > 0
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-600'
+              }`}
+            >
+              {selectedCategories.length === 0
+                ? 'Todas'
+                : `${selectedCategories.length} seleccionada${selectedCategories.length > 1 ? 's' : ''}`}
+              {' '}▾
+            </button>
+
+            {isCategoryFilterOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsCategoryFilterOpen(false)} />
+                <div className="absolute z-20 mt-1 w-56 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 space-y-0.5">
+                  <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase">Filtrar por categoría</span>
+                    {selectedCategories.length > 0 && (
+                      <button
+                        onClick={() => setSelectedCategories([])}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/60 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.length === 0}
+                      onChange={() => setSelectedCategories([])}
+                      className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Todas</span>
+                  </label>
+                  {CATEGORY_OPTIONS.map(cat => (
+                    <label
+                      key={cat}
+                      className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/60 cursor-pointer text-xs text-slate-700 dark:text-slate-200"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCategories.includes(cat)}
+                        onChange={() => toggleCategoryFilter(cat)}
+                        className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                      <span className="truncate">{cat}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -526,15 +597,31 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                <th className="px-3 py-2 text-left font-bold">Código</th>
-                <th className="px-3 py-2 text-left font-bold">Título</th>
-                <th className="px-3 py-2 text-left font-bold">Estado</th>
-                <th className="px-3 py-2 text-left font-bold">Prioridad</th>
-                <th className="px-3 py-2 text-left font-bold">Categoría</th>
-                <th className="px-3 py-2 text-left font-bold">Asignado</th>
-                <th className="px-3 py-2 text-left font-bold">País</th>
-                <th className="px-3 py-2 text-left font-bold">Fecha</th>
-                <th className="px-3 py-2 text-left font-bold">Avance</th>
+                {([
+                  { key: 'code', label: 'Código' },
+                  { key: 'title', label: 'Título' },
+                  { key: 'status', label: 'Estado' },
+                  { key: 'priority', label: 'Prioridad' },
+                  { key: 'category', label: 'Categoría' },
+                  { key: 'assignedUserName', label: 'Asignado' },
+                  { key: 'countryName', label: 'País' },
+                  { key: 'dueDate', label: 'Fecha' },
+                  { key: 'progress', label: 'Avance' }
+                ] as { key: typeof sortKey; label: string }[]).map(col => (
+                  <th key={col.label} className="px-3 py-2 text-left font-bold">
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"
+                      title="Ordenar"
+                    >
+                      {col.label}
+                      <span className="text-[10px]">
+                        {sortKey === col.key ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  </th>
+                ))}
                 <th className="px-3 py-2 text-right font-bold">Acciones</th>
               </tr>
             </thead>
@@ -546,7 +633,11 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
                   : task.status === 'completed' ? 100 : 0;
 
                 return (
-                  <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                  <tr key={task.id} className={`transition-colors ${
+                    task.category === 'Seguimiento'
+                      ? 'bg-slate-100 dark:bg-slate-900/50 hover:bg-slate-200 dark:hover:bg-slate-900/70'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                  }`}>
                     <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300 font-semibold whitespace-nowrap">
                       {task.code}
                     </td>
@@ -669,7 +760,11 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
             return (
               <div
                 key={task.id}
-                className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+                className={`rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group ${
+                  task.category === 'Seguimiento'
+                    ? 'bg-slate-100 dark:bg-slate-900/50 border-slate-300 dark:border-slate-700'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                }`}
               >
                 <div className="p-4 space-y-3">
                   {/* Card Header */}
