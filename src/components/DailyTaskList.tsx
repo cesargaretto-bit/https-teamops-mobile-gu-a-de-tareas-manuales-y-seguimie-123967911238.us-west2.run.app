@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   Clock, 
@@ -54,16 +54,40 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   currentRole,
   currentUser
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // Filters persist for the duration of the browser session (sessionStorage),
+  // so switching tabs or navigating away and back keeps whatever the user had
+  // configured — they only reset when the user logs out (see App.tsx onLogout)
+  // or closes the browser tab entirely. Date filter defaults to "today".
+  const FILTERS_STORAGE_KEY = 'teamops_task_filters';
+  const todayStr = new Date().toISOString().split('T')[0];
+  const savedFilters = (() => {
+    try {
+      const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [searchQuery, setSearchQuery] = useState(savedFilters?.searchQuery ?? '');
+  const [selectedStatus, setSelectedStatus] = useState<string>(savedFilters?.selectedStatus ?? 'all');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(savedFilters?.selectedCategories ?? []);
   const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false);
-  const [selectedPriority, setSelectedPriority] = useState<string>('all');
-  const [selectedCountry, setSelectedCountry] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
-  const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>([]);
+  const [selectedPriority, setSelectedPriority] = useState<string>(savedFilters?.selectedPriority ?? 'all');
+  const [selectedCountry, setSelectedCountry] = useState<string>(savedFilters?.selectedCountry ?? 'all');
+  const [dateFrom, setDateFrom] = useState<string>(savedFilters?.dateFrom ?? todayStr);
+  const [dateTo, setDateTo] = useState<string>(savedFilters?.dateTo ?? todayStr);
+  const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>(savedFilters?.selectedCollaboratorIds ?? []);
   const [isCollaboratorFilterOpen, setIsCollaboratorFilterOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+        searchQuery, selectedStatus, selectedCategories, selectedPriority,
+        selectedCountry, dateFrom, dateTo, selectedCollaboratorIds
+      }));
+    } catch {}
+  }, [searchQuery, selectedStatus, selectedCategories, selectedPriority, selectedCountry, dateFrom, dateTo, selectedCollaboratorIds]);
   const [sortKey, setSortKey] = useState<'code' | 'title' | 'status' | 'priority' | 'category' | 'assignedUserName' | 'countryName' | 'dueDate' | 'progress' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 

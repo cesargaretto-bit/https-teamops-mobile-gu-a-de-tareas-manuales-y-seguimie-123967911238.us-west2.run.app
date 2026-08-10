@@ -27,7 +27,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend
+  Legend,
+  Cell
 } from 'recharts';
 import { Task, Collaborator, ThemeConfig } from '../types';
 import { exportTasksToCSV, exportCollaboratorsToCSV, generatePDFReport, getThemeClasses } from '../utils/helpers';
@@ -185,6 +186,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       return {
         name: c.name.split(' ')[0],
         'Completadas': completed,
+        'Pendientes': total - completed,
         'Totales': total,
         'Cumplimiento (%)': total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
       };
@@ -209,8 +211,9 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   });
 
   // --- Time efficiency per collaborator (real vs. estimated minutes) ---
-  // Only counts tasks with actual work time logged (actualMinutes > 0), which is
-  // populated automatically once a collaborator sets a start/end time on a task.
+  // Includes every collaborator matching the current filters (even those with
+  // no logged time yet, shown as 0) so the chart is a complete team comparison
+  // rather than only showing whoever happens to have time logged.
   const efficiencyData = filteredCollaborators.map(c => {
     const theirTasks = productivityTasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
     const realMin = theirTasks.reduce((sum, t) => sum + t.actualMinutes, 0);
@@ -223,15 +226,16 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       eficiencia: efficiency,
       tasksWithTime: theirTasks.length
     };
-  }).filter(d => d.tasksWithTime > 0);
+  });
 
   // --- Workload (carga horaria) — total minutes worked per collaborator across all logged tasks ---
+  // Includes every collaborator matching the current filters, even those with 0 hours logged.
   const workloadData = filteredCollaborators.map(c => {
     const totalMin = productivityTasks
       .filter(t => t.assignedUserId === c.id && t.actualMinutes > 0)
       .reduce((sum, t) => sum + t.actualMinutes, 0);
     return { name: c.name.split(' ')[0], 'Horas Trabajadas': Math.round((totalMin / 60) * 10) / 10 };
-  }).filter(d => d['Horas Trabajadas'] > 0);
+  });
 
   // Aggregated performance for the collaborator table across every selected month
   const getAggregatedPerf = (collab: Collaborator) => {
@@ -239,7 +243,17 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       .map(m => collab.monthlyPerformance.find(p => p.month === m))
       .filter((p): p is NonNullable<typeof p> => Boolean(p));
     if (entries.length === 0) {
-      return collab.monthlyPerformance[collab.monthlyPerformance.length - 1] || null;
+      // No monthly-performance record exists yet for any of the selected periods
+      // (e.g. the current month hasn't been closed out). Fall back to the most
+      // recent record on file, but never show a completion/SOP rate for zero
+      // tasks — that reads as "0/0 pero 100%", which is misleading.
+      const last = collab.monthlyPerformance[collab.monthlyPerformance.length - 1];
+      if (!last) return null;
+      return {
+        ...last,
+        completionRate: last.tasksTotal > 0 ? last.completionRate : 0,
+        sopComplianceRate: last.tasksTotal > 0 ? last.sopComplianceRate : 0
+      };
     }
     const tasksCompleted = entries.reduce((sum, e) => sum + e.tasksCompleted, 0);
     const tasksTotal = entries.reduce((sum, e) => sum + e.tasksTotal, 0);
@@ -350,7 +364,14 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
                 <XAxis dataKey="key" stroke="#94a3b8" fontSize={11} />
                 <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
                 <Tooltip />
-                <Bar dataKey="Cumplimiento (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Cumplimiento (%)" radius={[4, 4, 0, 0]}>
+                  {priorityComplianceData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.key === 'Alta' ? '#ef4444' : entry.key === 'Media' ? '#f59e0b' : '#3b82f6'}
+                    />
+                  ))}
+                </Bar>
               </ReBarChart>
             </ResponsiveContainer>
           </div>
@@ -372,8 +393,8 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
                 <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="Totales" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Completadas" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Completadas" stackId="tareas" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Pendientes" stackId="tareas" fill="#94a3b8" radius={[4, 4, 0, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
@@ -730,23 +751,27 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
                     </td>
 
                     <td className="p-4 text-center">
-                      <span className={`px-2.5 py-1 rounded-full font-bold font-mono ${
-                        perf && perf.completionRate >= 95
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : perf && perf.completionRate >= 85
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-                      }`}>
-                        {perf ? `${perf.completionRate}%` : 'N/A'}
-                      </span>
+                      {perf && perf.tasksTotal > 0 ? (
+                        <span className={`px-2.5 py-1 rounded-full font-bold font-mono ${
+                          perf.completionRate >= 95
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : perf.completionRate >= 85
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                        }`}>
+                          {perf.completionRate}%
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-500 font-mono">N/A</span>
+                      )}
                     </td>
 
                     <td className="p-4 text-center font-bold text-slate-900 dark:text-white font-mono">
-                      {perf ? `${perf.sopComplianceRate}%` : 'N/A'}
+                      {perf && perf.tasksTotal > 0 ? `${perf.sopComplianceRate}%` : 'N/A'}
                     </td>
 
                     <td className="p-4 text-center font-mono">
-                      {perf ? `${perf.avgExecutionTimeMin}m (meta ${perf.targetTimeMin}m)` : 'N/A'}
+                      {perf && perf.tasksTotal > 0 ? `${perf.avgExecutionTimeMin}m (meta ${perf.targetTimeMin}m)` : 'N/A'}
                     </td>
 
                     <td className="p-4 text-center font-bold">
