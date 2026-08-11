@@ -58,7 +58,10 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   // so switching tabs or navigating away and back keeps whatever the user had
   // configured — they only reset when the user logs out (see App.tsx onLogout)
   // or closes the browser tab entirely. Date filter defaults to "today".
-  const FILTERS_STORAGE_KEY = 'teamops_task_filters';
+  // v2: bumped so any older cached filter state (saved before the date filter
+  // defaulted to "today") gets discarded instead of permanently overriding
+  // the new default with a stale empty value.
+  const FILTERS_STORAGE_KEY = 'teamops_task_filters_v2';
   const todayStr = new Date().toISOString().split('T')[0];
   const savedFilters = (() => {
     try {
