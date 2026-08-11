@@ -38,7 +38,7 @@ interface DailyTaskListProps {
   collaborators?: Collaborator[];
   onDeleteTask?: (taskId: string, deleteAllSeries?: boolean) => void;
   currentRole?: string;
-  currentUser?: { role?: string; name?: string } | null;
+  currentUser?: { role?: string; name?: string; email?: string } | null;
 }
 
 export const DailyTaskList: React.FC<DailyTaskListProps> = ({
@@ -77,7 +77,22 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
   const [selectedCountry, setSelectedCountry] = useState<string>(savedFilters?.selectedCountry ?? 'all');
   const [dateFrom, setDateFrom] = useState<string>(savedFilters?.dateFrom ?? todayStr);
   const [dateTo, setDateTo] = useState<string>(savedFilters?.dateTo ?? todayStr);
-  const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>(savedFilters?.selectedCollaboratorIds ?? []);
+
+  // By default, every user sees only their own tasks — matched from the
+  // logged-in session to the corresponding collaborator record by email.
+  // This only applies the very first time (no saved filter yet this session);
+  // anyone (including managers) can still switch to "Todos" or another
+  // collaborator via the filter, and that choice is what gets remembered.
+  const defaultOwnCollaboratorIds = (() => {
+    if (!currentUser?.email) return [];
+    const match = collaborators.find(
+      c => c.email && c.email.toLowerCase() === currentUser.email!.toLowerCase()
+    );
+    return match ? [match.id] : [];
+  })();
+  const [selectedCollaboratorIds, setSelectedCollaboratorIds] = useState<string[]>(
+    savedFilters?.selectedCollaboratorIds ?? defaultOwnCollaboratorIds
+  );
   const [isCollaboratorFilterOpen, setIsCollaboratorFilterOpen] = useState(false);
 
   useEffect(() => {
@@ -88,6 +103,23 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
       }));
     } catch {}
   }, [searchQuery, selectedStatus, selectedCategories, selectedPriority, selectedCountry, dateFrom, dateTo, selectedCollaboratorIds]);
+
+  // Collaborators load asynchronously from Supabase, so on a brand-new
+  // session (no saved filter yet) the "only my tasks" default above may not
+  // have found a match on first mount. Once the collaborator list arrives,
+  // apply the default exactly once — a ref (not state) tracks whether it's
+  // already been applied, so it never overrides a later explicit choice by
+  // the user (e.g. picking "Todos", which also lands on an empty array).
+  const hasAppliedOwnTaskDefault = React.useRef(Boolean(savedFilters?.selectedCollaboratorIds) || defaultOwnCollaboratorIds.length > 0);
+  useEffect(() => {
+    if (hasAppliedOwnTaskDefault.current) return;
+    if (!currentUser?.email || collaborators.length === 0) return;
+    const match = collaborators.find(
+      c => c.email && c.email.toLowerCase() === currentUser.email!.toLowerCase()
+    );
+    hasAppliedOwnTaskDefault.current = true;
+    if (match) setSelectedCollaboratorIds([match.id]);
+  }, [collaborators, currentUser?.email]);
   const [sortKey, setSortKey] = useState<'code' | 'title' | 'status' | 'priority' | 'category' | 'assignedUserName' | 'countryName' | 'dueDate' | 'progress' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -580,7 +612,7 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
             )}
           </div>
 
-          {isManagerView && collaborators.length > 0 && (
+          {collaborators.length > 0 && (
             <div className="relative flex flex-wrap items-center gap-1">
               <span className="text-slate-500 dark:text-slate-400 font-medium mr-1 inline-flex items-center gap-1 shrink-0">
                 👤 Colaborador:
