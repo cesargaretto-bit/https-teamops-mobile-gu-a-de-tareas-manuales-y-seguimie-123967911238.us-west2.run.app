@@ -236,9 +236,12 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
   // --- Time efficiency per collaborator (real vs. estimated minutes) ---
   // Includes every collaborator matching the current filters (even those with
   // no logged time yet, shown as 0) so the chart is a complete team comparison
-  // rather than only showing whoever happens to have time logged.
+  // rather than only showing whoever happens to have time logged. Uses
+  // tasksInSelectedPeriods (not the raw productivityTasks) so this chart also
+  // respects the period/granularity filter at the top of the section, same as
+  // every other chart here.
   const efficiencyData = useMemo(() => filteredCollaborators.map(c => {
-    const theirTasks = productivityTasks.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
+    const theirTasks = tasksInSelectedPeriods.filter(t => t.assignedUserId === c.id && t.actualMinutes > 0);
     const realMin = theirTasks.reduce((sum, t) => sum + t.actualMinutes, 0);
     const estMin = theirTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0);
     const efficiency = realMin > 0 ? Math.round((estMin / realMin) * 100) : 0;
@@ -249,16 +252,16 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       eficiencia: efficiency,
       tasksWithTime: theirTasks.length
     };
-  }), [filteredCollaborators, productivityTasks]);
+  }), [filteredCollaborators, tasksInSelectedPeriods]);
 
-  // --- Workload (carga horaria) — total minutes worked per collaborator across all logged tasks ---
-  // Includes every collaborator matching the current filters, even those with 0 hours logged.
+  // --- Workload (carga horaria) — total minutes worked per collaborator, within
+  // the selected period(s), across all logged (non-"Seguimiento") tasks. ---
   const workloadData = useMemo(() => filteredCollaborators.map(c => {
-    const totalMin = productivityTasks
+    const totalMin = tasksInSelectedPeriods
       .filter(t => t.assignedUserId === c.id && t.actualMinutes > 0)
       .reduce((sum, t) => sum + t.actualMinutes, 0);
     return { name: c.name.split(' ')[0], 'Horas Trabajadas': Math.round((totalMin / 60) * 10) / 10 };
-  }), [filteredCollaborators, productivityTasks]);
+  }), [filteredCollaborators, tasksInSelectedPeriods]);
 
   // Aggregated performance for the collaborator table across every selected month
   const getAggregatedPerf = (collab: Collaborator) => {
