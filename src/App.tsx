@@ -416,11 +416,50 @@ export default function App() {
 
   const handleUpdateTask = async (updatedTask: Task) => {
     const taskWithSyncFlag = { ...updatedTask, synced: isOnline };
-    setTasks(prev => prev.map(t => t.id === updatedTask.id ? taskWithSyncFlag : t));
+
+    // Early-completion rule for recurring "Seguimiento" tasks: if this
+    // occurrence was just completed before its scheduled periodicity end
+    // date, the series is done — any remaining not-yet-started future
+    // occurrences must stop showing up as pending instead of continuing to
+    // regenerate/linger until their own due dates.
+    const closesSeriesEarly =
+      updatedTask.status === 'completed' &&
+      updatedTask.category === 'Seguimiento' &&
+      !!updatedTask.recurrenceSeriesId &&
+      !!updatedTask.periodEndDate &&
+      updatedTask.dueDate < updatedTask.periodEndDate;
+
+    const futureSiblingIdsToClose = closesSeriesEarly
+      ? tasks
+          .filter(t =>
+            t.id !== updatedTask.id &&
+            t.recurrenceSeriesId === updatedTask.recurrenceSeriesId &&
+            t.status === 'pending' &&
+            t.dueDate > updatedTask.dueDate
+          )
+          .map(t => t.id)
+      : [];
+
+    if (futureSiblingIdsToClose.length > 0) {
+      setTasks(prev => prev
+        .filter(t => !futureSiblingIdsToClose.includes(t.id))
+        .map(t => (t.id === updatedTask.id ? taskWithSyncFlag : t))
+      );
+      showToast(`✓ Tarea de seguimiento completada anticipadamente: se cerró la periodicidad y se cancelaron ${futureSiblingIdsToClose.length} ocurrencia(s) futura(s) pendiente(s).`);
+    } else {
+      setTasks(prev => prev.map(t => t.id === updatedTask.id ? taskWithSyncFlag : t));
+    }
 
     if (!isOnline || !isSupabaseConfigured) {
       showToast('⚠️ Cambio guardado localmente en Modo Offline. Se sincronizará al reconectar.');
       return;
+    }
+
+    if (futureSiblingIdsToClose.length > 0) {
+      const { error: deleteError } = await supabase.from('tasks').delete().in('id', futureSiblingIdsToClose);
+      if (deleteError) {
+        console.error('Error al cerrar la periodicidad (cancelar ocurrencias futuras) en Supabase:', deleteError);
+      }
     }
 
     const { error } = await supabase
