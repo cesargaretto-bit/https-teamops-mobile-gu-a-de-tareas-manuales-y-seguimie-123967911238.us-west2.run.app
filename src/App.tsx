@@ -1016,7 +1016,7 @@ export default function App() {
         onLogout={() => {
           setCurrentUser(null);
           try {
-            sessionStorage.removeItem('teamops_task_filters');
+            sessionStorage.removeItem('teamops_task_filters_v2');
           } catch {}
           showToast('Sesión cerrada. Ha ingresado como Invitado.');
         }}

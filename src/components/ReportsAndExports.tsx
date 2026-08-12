@@ -235,7 +235,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
       return {
         name: c.name.split(' ')[0],
         'Completadas': completed,
-        'Pendientes': total - completed,
+        'No Completadas': total - completed,
         'Totales': total,
         'Cumplimiento (%)': total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
       };
@@ -446,7 +446,7 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 <Bar dataKey="Completadas" stackId="tareas" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Pendientes" stackId="tareas" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="No Completadas" stackId="tareas" fill="#94a3b8" radius={[4, 4, 0, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
