@@ -126,10 +126,36 @@ export const ReportsAndExports: React.FC<ReportsAndExportsProps> = ({
 
   // --- KPI Chart: Team Compliance (tasks completed vs. total), computed directly
   // from tasks so it can be broken down by day, week, current month or
-  // accumulated across the selected periods — not just monthly averages. ---
-  const tasksInSelectedPeriods = useMemo(
-    () => filteredTasksByUser.filter(t => effectiveMonths.includes((t.dueDate || '').slice(0, 7))),
-    [filteredTasksByUser, effectiveMonths]
+  // accumulated across the selected periods — not just monthly averages.
+  //
+  // The granularity selector doesn't just change how this one chart buckets
+  // its bars — "Día" and "Semana" actually narrow the scope of every chart
+  // in this section to today / the current ISO week, respectively, so every
+  // report (not just this one) reflects the period picked at the top. "Mes
+  // Actual"/"Meses Acumulados" keep the full selected month(s), same as before.
+  const todayStr = new Date().toISOString().split('T')[0];
+  const currentWeekRange = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay() || 7; // Sunday(0) -> 7, so Monday is always day 1
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (day - 1));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    return { from: fmt(monday), to: fmt(sunday) };
+  }, []);
+
+  const tasksInSelectedPeriods = useMemo(() => {
+    const inSelectedMonths = filteredTasksByUser.filter(t => effectiveMonths.includes((t.dueDate || '').slice(0, 7)));
+    if (granularity === 'day') {
+      return inSelectedMonths.filter(t => t.dueDate === todayStr);
+    }
+    if (granularity === 'week') {
+      return inSelectedMonths.filter(t => t.dueDate && t.dueDate >= currentWeekRange.from && t.dueDate <= currentWeekRange.to);
+    }
+    return inSelectedMonths;
+  },
+    [filteredTasksByUser, effectiveMonths, granularity, todayStr, currentWeekRange]
   );
 
   const buildComplianceBuckets = (): { key: string; 'Cumplimiento (%)': number; total: number }[] => {
