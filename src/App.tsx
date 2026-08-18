@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CheckSquare, 
   BookOpen, 
@@ -43,7 +43,7 @@ import {
   INITIAL_STATUSES,
   INITIAL_LOCATIONS
 } from './data/mockData';
-import { getThemeClasses, generateRecurringDates } from './utils/helpers';
+import { getThemeClasses, generateRecurringDates, filterTasksByVisibility, DEFAULT_ROLE_VISIBILITY_CONFIG, RoleVisibilityConfig } from './utils/helpers';
 import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
 import { HeaderNavbar } from './components/HeaderNavbar';
 import { DailyTaskList } from './components/DailyTaskList';
@@ -165,6 +165,29 @@ export default function App() {
 
   // App Config States
   const [themeConfig, setThemeConfig] = useState<ThemeConfig>(INITIAL_THEME_CONFIG);
+  // Task privacy: visibility scope per system role (own / department / all),
+  // configurable from ABM > Roles. Persists across sessions like other app config.
+  const [roleVisibilityConfig, setRoleVisibilityConfig] = useState<RoleVisibilityConfig>(() => {
+    try {
+      const saved = localStorage.getItem('teamops_role_visibility_config');
+      return saved ? { ...DEFAULT_ROLE_VISIBILITY_CONFIG, ...JSON.parse(saved) } : DEFAULT_ROLE_VISIBILITY_CONFIG;
+    } catch {
+      return DEFAULT_ROLE_VISIBILITY_CONFIG;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('teamops_role_visibility_config', JSON.stringify(roleVisibilityConfig));
+    } catch {}
+  }, [roleVisibilityConfig]);
+
+  // Privacy: tasks filtered by role hierarchy + work sector before they ever
+  // reach Guía de Tareas, Panel Admin or Reportes. Computed once, centrally,
+  // so all three screens are always consistent with each other.
+  const visibleTasks = useMemo(
+    () => filterTasksByVisibility(tasks, currentUser, collaborators, roleVisibilityConfig),
+    [tasks, currentUser, collaborators, roleVisibilityConfig]
+  );
   const [securityConfig, setSecurityConfig] = useState<SecurityConfig>(INITIAL_SECURITY_CONFIG);
   const [pushConfig, setPushConfig] = useState<PushNotificationConfig>(INITIAL_PUSH_CONFIG);
 
@@ -838,7 +861,7 @@ export default function App() {
             <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
               {activeTab === 'tasks' && (
                 <DailyTaskList
-                  tasks={tasks}
+                  tasks={visibleTasks}
                   onUpdateTask={handleUpdateTask}
                   onDeleteTask={handleDeleteTask}
                   currentRole={currentRole}
@@ -888,6 +911,8 @@ export default function App() {
                   onAddCollaborator={handleAddCollaborator}
                   onUpdateCollaborator={handleUpdateCollaborator}
                   onDeleteCollaborator={handleDeleteCollaborator}
+                  roleVisibilityConfig={roleVisibilityConfig}
+                  onUpdateRoleVisibilityConfig={setRoleVisibilityConfig}
                   themeConfig={themeConfig}
                   initialSubTab="countries"
                 />
@@ -920,6 +945,8 @@ export default function App() {
                   onAddCollaborator={handleAddCollaborator}
                   onUpdateCollaborator={handleUpdateCollaborator}
                   onDeleteCollaborator={handleDeleteCollaborator}
+                  roleVisibilityConfig={roleVisibilityConfig}
+                  onUpdateRoleVisibilityConfig={setRoleVisibilityConfig}
                   themeConfig={themeConfig}
                   initialSubTab="collaborators"
                 />
@@ -928,7 +955,7 @@ export default function App() {
               {activeTab === 'admin' && (
                 <AdminTrackerDashboard
                   collaborators={collaborators}
-                  tasks={tasks}
+                  tasks={visibleTasks}
                   onOpenCreateTaskModal={() => setIsCreateTaskOpen(true)}
                   onNavigateToCollaborators={() => setActiveTab('collaborators')}
                   themeConfig={themeConfig}
@@ -938,7 +965,7 @@ export default function App() {
               {activeTab === 'reports' && (
                 <ReportsAndExports
                   collaborators={collaborators}
-                  tasks={tasks}
+                  tasks={visibleTasks}
                   themeConfig={themeConfig}
                 />
               )}

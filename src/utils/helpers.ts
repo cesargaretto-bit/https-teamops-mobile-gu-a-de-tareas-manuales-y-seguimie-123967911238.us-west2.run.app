@@ -1,5 +1,81 @@
 import { Task, Collaborator, PrimaryColorTheme, TaskPeriodicity } from '../types';
 
+// --- Task privacy: visibility by role hierarchy + work sector (department) ---
+//
+// Scope meaning:
+//  - 'own'        -> only tasks assigned to the logged-in collaborator.
+//  - 'department' -> tasks assigned to anyone in the same department.
+//  - 'all'        -> no restriction (full visibility).
+//
+// Configurable per system role (collaborator / supervisor / admin) so this
+// can be adjusted without a code change. Defaults: collaborator=own,
+// supervisor=department, admin=all.
+export type TaskVisibilityScope = 'own' | 'department' | 'all';
+
+export interface RoleVisibilityConfig {
+  collaborator: TaskVisibilityScope;
+  supervisor: TaskVisibilityScope;
+  admin: TaskVisibilityScope;
+}
+
+export const DEFAULT_ROLE_VISIBILITY_CONFIG: RoleVisibilityConfig = {
+  collaborator: 'own',
+  supervisor: 'department',
+  admin: 'all',
+};
+
+/**
+ * Minimal shape needed to resolve visibility — kept intentionally decoupled
+ * from the UserSession interface (defined in UserProfileLoginModal.tsx) to
+ * avoid a circular import, since that component already imports from here.
+ */
+export interface VisibilitySessionLike {
+  email: string;
+  role: 'collaborator' | 'admin' | 'supervisor';
+  department?: string;
+}
+
+/**
+ * Applies the role-hierarchy + sector privacy rule to a task list. This is
+ * a hard restriction meant to be applied once, centrally (in App.tsx),
+ * before tasks are handed to any screen — every view (Guía de Tareas, Panel
+ * Admin, Reportes) then automatically only ever sees what the current user
+ * is allowed to see.
+ *
+ * Tasks with no assignedUserId are only visible under 'all' scope, since
+ * there's no owner/department to check them against.
+ */
+export function filterTasksByVisibility(
+  tasks: Task[],
+  currentUser: VisibilitySessionLike | null,
+  collaborators: Collaborator[],
+  config: RoleVisibilityConfig = DEFAULT_ROLE_VISIBILITY_CONFIG
+): Task[] {
+  if (!currentUser) {
+    return tasks.filter(t => !t.assignedUserId);
+  }
+
+  const scope = config[currentUser.role] || 'own';
+  if (scope === 'all') {
+    return tasks;
+  }
+
+  const me = collaborators.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
+
+  if (scope === 'own') {
+    if (!me) return tasks.filter(t => !t.assignedUserId);
+    return tasks.filter(t => t.assignedUserId === me.id);
+  }
+
+  // scope === 'department'
+  const myDepartment = me?.department || currentUser.department;
+  if (!myDepartment) return tasks.filter(t => !t.assignedUserId);
+  const deptCollaboratorIds = new Set(
+    collaborators.filter(c => c.department === myDepartment).map(c => c.id)
+  );
+  return tasks.filter(t => !!t.assignedUserId && deptCollaboratorIds.has(t.assignedUserId));
+}
+
 // Helper to calculate recurring dates within period validity (up to 1 year horizon)
 export function generateRecurringDates(
   startDateStr: string,

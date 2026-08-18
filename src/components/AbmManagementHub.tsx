@@ -35,7 +35,7 @@ import {
   ThemeConfig 
 } from '../types';
 import { CollaboratorsManager } from './CollaboratorsManager';
-import { getThemeClasses } from '../utils/helpers';
+import { getThemeClasses, RoleVisibilityConfig, TaskVisibilityScope } from '../utils/helpers';
 import { COUNTRY_FLAG_PRESETS } from '../data/mockData';
 
 interface AbmManagementHubProps {
@@ -73,6 +73,10 @@ interface AbmManagementHubProps {
   onUpdateCollaborator: (collaborator: Collaborator) => void;
   onDeleteCollaborator: (id: string) => void;
 
+  // Task privacy: visibility scope (own / department / all) per system role.
+  roleVisibilityConfig?: RoleVisibilityConfig;
+  onUpdateRoleVisibilityConfig?: (config: RoleVisibilityConfig) => void;
+
   themeConfig: ThemeConfig;
   initialSubTab?: 'collaborators' | 'countries' | 'roles' | 'departments' | 'statuses' | 'locations';
 }
@@ -103,6 +107,8 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
   onAddCollaborator,
   onUpdateCollaborator,
   onDeleteCollaborator,
+  roleVisibilityConfig,
+  onUpdateRoleVisibilityConfig,
   themeConfig,
   initialSubTab = 'countries'
 }) => {
@@ -512,6 +518,42 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
               <span>Agregar Nuevo Rol</span>
             </button>
           </div>
+
+          {roleVisibilityConfig && onUpdateRoleVisibilityConfig && (
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-purple-500" />
+                  Privacidad de Tareas por Jerarquía y Sector
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Define qué tareas puede ver cada rol del sistema: solo las propias, las de su departamento (sector de trabajo), o todas. Aplica a Guía de Tareas, Panel Admin y Reportes.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {([
+                  { key: 'collaborator', label: 'Colaborador' },
+                  { key: 'supervisor', label: 'Supervisor' },
+                  { key: 'admin', label: 'Admin' },
+                ] as { key: keyof typeof roleVisibilityConfig; label: string }[]).map(({ key, label }) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                      {label}
+                    </label>
+                    <select
+                      value={roleVisibilityConfig[key]}
+                      onChange={(e) => onUpdateRoleVisibilityConfig({ ...roleVisibilityConfig, [key]: e.target.value as TaskVisibilityScope })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    >
+                      <option value="own">Solo sus propias tareas</option>
+                      <option value="department">Su departamento (sector)</option>
+                      <option value="all">Todas las tareas</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {roles.map((role) => (
