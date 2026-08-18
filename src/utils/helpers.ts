@@ -14,7 +14,21 @@ import { Task, Collaborator, PrimaryColorTheme, TaskPeriodicity } from '../types
 // Defaults: colaborador=own, supervisor=department, jefe=all, gerente=all,
 // admin=all ('admin' is the technical/system-config role, kept separate from
 // the operational hierarchy but also granted full visibility by default).
+//
+// On top of the configured scope, a rank cap always applies: nobody ever
+// sees a task assigned to someone strictly above them in the hierarchy,
+// even if the scope would otherwise include them (e.g. a Supervisor whose
+// department scope would technically include a Jefe in the same sector, or
+// a Jefe whose 'all' scope would otherwise include the Gerente's tasks).
 export type TaskVisibilityScope = 'own' | 'department' | 'all';
+
+const ROLE_RANK: Record<string, number> = {
+  collaborator: 1,
+  supervisor: 2,
+  jefe: 3,
+  gerente: 4,
+  admin: 5,
+};
 
 export interface RoleVisibilityConfig {
   collaborator: TaskVisibilityScope;
@@ -64,8 +78,22 @@ export function filterTasksByVisibility(
   }
 
   const scope = config[currentUser.role] || 'own';
+  const viewerRank = ROLE_RANK[currentUser.role] ?? 1;
+  const collabById = new Map(collaborators.map(c => [c.id, c]));
+
+  // A task is only visible if its assignee's role rank is <= the viewer's
+  // rank. Unassigned tasks, or tasks assigned to someone no longer in the
+  // roster, aren't restricted by this check (nothing to compare against).
+  const isNotAboveViewer = (t: Task) => {
+    if (!t.assignedUserId) return true;
+    const assignee = collabById.get(t.assignedUserId);
+    if (!assignee) return true;
+    const assigneeRank = ROLE_RANK[assignee.role] ?? 1;
+    return assigneeRank <= viewerRank;
+  };
+
   if (scope === 'all') {
-    return tasks;
+    return tasks.filter(isNotAboveViewer);
   }
 
   const me = collaborators.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
@@ -81,7 +109,7 @@ export function filterTasksByVisibility(
   const deptCollaboratorIds = new Set(
     collaborators.filter(c => c.department === myDepartment).map(c => c.id)
   );
-  return tasks.filter(t => !!t.assignedUserId && deptCollaboratorIds.has(t.assignedUserId));
+  return tasks.filter(t => !!t.assignedUserId && deptCollaboratorIds.has(t.assignedUserId) && isNotAboveViewer(t));
 }
 
 // Helper to calculate recurring dates within period validity (up to 1 year horizon)
