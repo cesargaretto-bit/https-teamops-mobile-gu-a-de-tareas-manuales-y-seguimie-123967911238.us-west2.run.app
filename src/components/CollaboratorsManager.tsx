@@ -871,7 +871,23 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                   >
                     {roles && roles.length > 0 ? (
                       roles.map(r => {
-                        const val = r.code.toLowerCase() === 'admin' ? 'admin' : r.code.toLowerCase() === 'supervisor' ? 'supervisor' : r.code.toLowerCase() === 'collaborator' || r.code.toLowerCase() === 'colab' ? 'collaborator' : r.title;
+                        // Map each custom Role (ABM > Roles catalog: title/description/
+                        // accessLevel) to one of the 5 canonical operational values that
+                        // drive real permissions (task privacy scope, delete rights,
+                        // manager-view). Matched by code/title keywords so any custom
+                        // role naming ("Jefe de Operaciones", "JEFE", etc.) still resolves
+                        // correctly instead of silently falling back to the free-text
+                        // title (which broke privacy scope for non-obvious role names).
+                        const codeOrTitle = `${r.code} ${r.title}`.toLowerCase();
+                        const val = codeOrTitle.includes('gerente') || codeOrTitle.includes('manager')
+                          ? 'gerente'
+                          : codeOrTitle.includes('jefe') || codeOrTitle.includes('chief')
+                          ? 'jefe'
+                          : codeOrTitle.includes('admin')
+                          ? 'admin'
+                          : codeOrTitle.includes('supervisor') || codeOrTitle.includes('coordinador')
+                          ? 'supervisor'
+                          : 'collaborator';
                         return (
                           <option key={r.id} value={val}>
                             {r.title} ({r.code})
