@@ -168,17 +168,23 @@ export const DailyTaskList: React.FC<DailyTaskListProps> = ({
     currentRole === 'admin' ||
     currentRole === 'supervisor' ||
     currentUser?.role === 'admin' ||
-    currentUser?.role === 'supervisor';
+    currentUser?.role === 'supervisor' ||
+    currentUser?.role === 'jefe' ||
+    currentUser?.role === 'gerente';
 
-  // Manager-level filter by collaborator: available to Admin, Supervisor and
-  // any custom role named/coded "Gerente" (Manager) created in the Roles ABM.
+  // Manager-level filter by collaborator: available to Admin, Supervisor,
+  // Jefe, Gerente, and any custom role named/coded "Gerente" (Manager)
+  // created in the Roles ABM.
   const roleLabel = `${currentRole || ''} ${currentUser?.role || ''}`.toLowerCase();
   const isManagerView =
     currentRole === 'admin' ||
     currentRole === 'supervisor' ||
     currentUser?.role === 'admin' ||
     currentUser?.role === 'supervisor' ||
+    currentUser?.role === 'jefe' ||
+    currentUser?.role === 'gerente' ||
     roleLabel.includes('gerente') ||
+    roleLabel.includes('jefe') ||
     roleLabel.includes('manager');
 
   const toggleCollaboratorFilter = (collabId: string) => {

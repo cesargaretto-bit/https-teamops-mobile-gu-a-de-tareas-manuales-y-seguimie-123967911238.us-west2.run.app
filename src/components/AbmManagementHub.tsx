@@ -530,11 +530,13 @@ export const AbmManagementHub: React.FC<AbmManagementHubProps> = ({
                   Define qué tareas puede ver cada rol del sistema: solo las propias, las de su departamento (sector de trabajo), o todas. Aplica a Guía de Tareas, Panel Admin y Reportes.
                 </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {([
+                  { key: 'gerente', label: 'Gerente' },
+                  { key: 'jefe', label: 'Jefe' },
+                  { key: 'supervisor', label: 'Supervisor / Coordinador' },
                   { key: 'collaborator', label: 'Colaborador' },
-                  { key: 'supervisor', label: 'Supervisor' },
-                  { key: 'admin', label: 'Admin' },
+                  { key: 'admin', label: 'Admin (sistema)' },
                 ] as { key: keyof typeof roleVisibilityConfig; label: string }[]).map(({ key, label }) => (
                   <div key={key} className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">

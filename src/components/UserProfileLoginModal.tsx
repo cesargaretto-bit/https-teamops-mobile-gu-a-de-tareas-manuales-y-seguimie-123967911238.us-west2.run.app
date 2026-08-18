@@ -25,7 +25,7 @@ export interface UserSession {
   id: string;
   name: string;
   email: string;
-  role: 'collaborator' | 'admin' | 'supervisor';
+  role: 'collaborator' | 'admin' | 'supervisor' | 'jefe' | 'gerente';
   avatar: string;
   department: string;
   locationName?: string;

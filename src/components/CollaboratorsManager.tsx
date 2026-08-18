@@ -81,7 +81,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'collaborator' as 'collaborator' | 'admin' | 'supervisor',
+    role: 'collaborator' as 'collaborator' | 'admin' | 'supervisor' | 'jefe' | 'gerente',
     department: 'Mantenimiento Mecánico',
     activeStatus: 'En Campo' as 'En Campo' | 'En Pausa' | 'Desconectado',
     avatar: '',
@@ -180,7 +180,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const totalCount = collaborators.length;
   const inFieldCount = collaborators.filter(c => c.activeStatus === 'En Campo').length;
   const inPauseCount = collaborators.filter(c => c.activeStatus === 'En Pausa').length;
-  const supervisorsCount = collaborators.filter(c => c.role === 'supervisor' || c.role === 'admin').length;
+  const supervisorsCount = collaborators.filter(c => c.role === 'supervisor' || c.role === 'jefe' || c.role === 'gerente' || c.role === 'admin').length;
 
   // Form Handlers
   const openCreateModal = () => {
@@ -269,10 +269,24 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
     switch (role) {
       case 'admin':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+      case 'gerente':
+        return 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+      case 'jefe':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-200 dark:border-amber-800';
       case 'supervisor':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-200 dark:border-blue-800';
       default:
         return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'admin': return 'Admin';
+      case 'gerente': return 'Gerente';
+      case 'jefe': return 'Jefe';
+      case 'supervisor': return 'Supervisor';
+      default: return 'Colaborador';
     }
   };
 
@@ -423,6 +437,8 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
               <option value="all">Todos los Roles</option>
               <option value="collaborator">Colaborador</option>
               <option value="supervisor">Supervisor</option>
+              <option value="jefe">Jefe</option>
+              <option value="gerente">Gerente</option>
               <option value="admin">Administrador</option>
             </select>
 
@@ -521,7 +537,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                     </div>
 
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 uppercase tracking-wider ${getRoleBadgeClass(c.role)}`}>
-                      {c.role === 'admin' ? 'Admin' : c.role === 'supervisor' ? 'Supervisor' : 'Colaborador'}
+                      {getRoleLabel(c.role)}
                     </span>
                   </div>
 
@@ -659,7 +675,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
 
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getRoleBadgeClass(c.role)}`}>
-                        {c.role}
+                        {getRoleLabel(c.role)}
                       </span>
                     </td>
 
@@ -866,6 +882,8 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                       <>
                         <option value="collaborator">Colaborador</option>
                         <option value="supervisor">Supervisor</option>
+                        <option value="jefe">Jefe</option>
+                        <option value="gerente">Gerente</option>
                         <option value="admin">Administrador</option>
                       </>
                     )}

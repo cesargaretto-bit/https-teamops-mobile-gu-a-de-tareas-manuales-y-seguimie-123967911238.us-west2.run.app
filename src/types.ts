@@ -84,7 +84,7 @@ export interface Collaborator {
   id: string;
   name: string;
   email: string;
-  role: 'collaborator' | 'admin' | 'supervisor';
+  role: 'collaborator' | 'admin' | 'supervisor' | 'jefe' | 'gerente';
   avatar: string;
   department: string;
   activeStatus: 'En Campo' | 'En Pausa' | 'Desconectado';

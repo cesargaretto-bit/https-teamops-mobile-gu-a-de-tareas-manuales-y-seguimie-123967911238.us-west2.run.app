@@ -2,25 +2,33 @@ import { Task, Collaborator, PrimaryColorTheme, TaskPeriodicity } from '../types
 
 // --- Task privacy: visibility by role hierarchy + work sector (department) ---
 //
+// Hierarchy (highest to lowest): Gerente > Jefe > Supervisor > Colaborador.
+//
 // Scope meaning:
 //  - 'own'        -> only tasks assigned to the logged-in collaborator.
 //  - 'department' -> tasks assigned to anyone in the same department.
 //  - 'all'        -> no restriction (full visibility).
 //
-// Configurable per system role (collaborator / supervisor / admin) so this
-// can be adjusted without a code change. Defaults: collaborator=own,
-// supervisor=department, admin=all.
+// Configurable per system role from ABM > Roles > "Privacidad de Tareas por
+// Jerarquía y Sector" so this can be adjusted without a code change.
+// Defaults: colaborador=own, supervisor=department, jefe=all, gerente=all,
+// admin=all ('admin' is the technical/system-config role, kept separate from
+// the operational hierarchy but also granted full visibility by default).
 export type TaskVisibilityScope = 'own' | 'department' | 'all';
 
 export interface RoleVisibilityConfig {
   collaborator: TaskVisibilityScope;
   supervisor: TaskVisibilityScope;
+  jefe: TaskVisibilityScope;
+  gerente: TaskVisibilityScope;
   admin: TaskVisibilityScope;
 }
 
 export const DEFAULT_ROLE_VISIBILITY_CONFIG: RoleVisibilityConfig = {
   collaborator: 'own',
   supervisor: 'department',
+  jefe: 'all',
+  gerente: 'all',
   admin: 'all',
 };
 
@@ -31,7 +39,7 @@ export const DEFAULT_ROLE_VISIBILITY_CONFIG: RoleVisibilityConfig = {
  */
 export interface VisibilitySessionLike {
   email: string;
-  role: 'collaborator' | 'admin' | 'supervisor';
+  role: 'collaborator' | 'admin' | 'supervisor' | 'jefe' | 'gerente';
   department?: string;
 }
 
